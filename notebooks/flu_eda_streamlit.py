@@ -12,7 +12,10 @@ import plotly.express as px  # Be sure to import express
 
 
 
-st.title('Flu Date EDA')
+st.title('Flu Data EDA')
+
+st.write('## Authors: Dimitris Vamvourellis, Benjamin Levy, Will Fried, Matthieu Meeus')
+
 
 st.write('## Data Loading')
 st.write('First we will load the data from all states into one single dataframe. Basically, for each state\
@@ -105,8 +108,8 @@ states_lat_long = states_lat_long.rename(columns={"Latitude": "latitude", "Longi
 
 
 st.write('To visualize the correlations between states, below you can choose a specific state and see a map of the correlation of its WILI time series\
-	with this of other stat on the same map. By looking at a few different states, it is clear that most states are strongly correlated with most of \
-	the rest of the states without necessarily being more correlated with the adjacent states rather than any other state. However, there are exceptions like California\
+	with any other state. By looking at a few different states, it is clear that most states are strongly correlated with most of \
+	of the other states in US without necessarily being more correlated with their adjacent ones. However, there are some exceptions like California\
 	which seems to be a lot more correlated to its adjacent states rather than states on the East Coast for example.')
 
 
