@@ -1,0 +1,1 @@
+web: sh streamlit-app/setup.sh && streamlit run streamlit-app/flu_eda_streamlit.py
