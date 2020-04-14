@@ -9,7 +9,7 @@ pd.set_option('display.max_rows', None)
 import csv
 plt.rcParams.update({'font.size': 18})
 import plotly.express as px  # Be sure to import express
-
+from covid_flu import config
 
 
 st.title('Flu Data EDA')
@@ -24,23 +24,18 @@ st.write('First we will load the data from all states into one single dataframe.
 
 @st.cache
 def fetch_and_clean_data():
+	flu_dir = config.data / 'raw' / 'flu_ground_truth'
 
-	flu_dir = '../flu_ground_truth/'
+	#flu_dir = '../flu_ground_truth/'
 	filename = 'wILI_cleaned_Alabama.csv'
-	with open(flu_dir + filename, 'r') as f:
-	    weeks = [row.split(',')[0] for row in f][1:]
-	week2cnt = {weeks[i]: i for i in range(len(weeks))}
-
-	flu_dir = '../flu_ground_truth/'
-	filename = 'wILI_cleaned_Alabama.csv'
-	with open(flu_dir + filename, 'r') as f:
+	with open(flu_dir / filename, 'r') as f:
 	    weeks = [row.split(',')[0] for row in f][1:]
 	week2cnt = {weeks[i]: i for i in range(len(weeks))}
 
 	location2info = {}
 	for filename in os.listdir(flu_dir):
 	    location = filename.replace('.csv', '').split('_')[-1]
-	    with open(flu_dir + filename, 'r') as f:
+	    with open(flu_dir / filename, 'r') as f:
 	        rows = list(csv.reader(f))
 	        time2wili = {row[0]: float(row[1]) for row in rows[1:]}
 	        location2info[location] = time2wili
@@ -102,8 +97,7 @@ st.write("""
 
 correlation_df
 
-
-states_lat_long = pd.read_csv('../data/raw/statelatlong.csv')
+states_lat_long = pd.read_csv(config.data / 'raw' / 'statelatlong.csv')
 states_lat_long = states_lat_long.rename(columns={"Latitude": "latitude", "Longitude": "longitude", "City":"State_full"})
 
 
