@@ -19,7 +19,7 @@ st.write('## Authors: Dimitris Vamvourellis, Benjamin Levy, Will Fried, Matthieu
 
 st.write('## Data Loading')
 st.write('First we will load the data from all states into one single dataframe. Basically, for each state\
-	      we have the weekly influenza-like illness (WILI) rate for the last 10 years.\
+	      (except for Florida) we have the weekly influenza-like illness (WILI) rate for the last 10 years.\
 	     ')
 
 @st.cache
@@ -47,17 +47,23 @@ def fetch_and_clean_data():
 
 	#fill missing values
 	df = df.fillna(df.mean())
-	return df 
+	return df, week2cnt
 
-df = fetch_and_clean_data()
+df, week2cnt = fetch_and_clean_data()
 
 st.write(df)
 
 st.write('## WILI rate through time in each state')
 st.write("""
 	      Below we can see the WILI rate time series (first plot) for each state as well as the mean
-	      WILI rate over the states at each point in time. It is evident that there is a clear seasonal
-	      pattern with the peak value varying by state.
+	      WILI rate over the states at each point in time (second plot). The first plot indicates that there 
+	      is significant variance in the WILI rate between the states. Meanwhile, the second plot shows that the 
+	      rate of flu-like illnesses follows an annual cyclical trend where the rate peaks during the colder,
+	       winter months of December through March and reaches its low during the warmer summer months.
+	        While the rate during the warmer months is very consistent from year to year, there is a lot more
+	         variation in the annual peaks. For example, the flu season of 2011-2012 (represented by the second 
+	         peak in the plot) was abnormally mild, while the flu season of 2017-2018 (represented by the second 
+	         to last peak in the plot) was abnormally severe.
 	    """)
 
 
@@ -68,16 +74,27 @@ if st.checkbox('Show chart'):
 		plt.plot(list(data.index), list(data))
 	st.pyplot(fig)
 
-month_avg = []
+weeks = list(week2cnt.keys())
+beginning_december_week = weeks.index('2010-48')
+end_march_week = beginning_december_week + 17
+
+weeks_in_year = 52
+month_avgs = []
+colors = []
 for idx in df.index:
     month_data = df.loc[idx, :]
     month_data = [x for x in month_data if not pd.isnull(x)]
-    month_avg.append(np.mean(month_data))
-
+    month_avgs.append(np.mean(month_data))
+    colors.append('r' if beginning_december_week < idx % weeks_in_year < end_march_week else 'g')
+    
 fig = plt.figure(figsize=(20, 10))
-plt.plot(df.index, month_avg)
+plt.scatter(df.index, month_avgs, color=colors)
+plt.scatter(0, month_avgs[0], color='g', label='week between April and November')
+plt.scatter(15, month_avgs[15], color='r', label='week between December and March')
 plt.xlabel('weeks since 2010-40')
-plt.ylabel('')
+plt.ylabel('wILI')
+plt.legend()
+plt.title('average wILI by week across all states and territories')
 st.pyplot(fig)
 
 st.write("""
@@ -91,7 +108,7 @@ correlation_df = df.corr()
 
 st.write('## Correlation Analysis')
 st.write("""
-	     To better understand whether there are any patterns related to the location of states, below we calculate the correlaiton matrix 
+	     To better understand whether there are any patterns related to the location of states, below we calculate the correlation matrix 
 	     between states based on the WILI state time series. 
 	    """)
 
@@ -103,8 +120,8 @@ states_lat_long = states_lat_long.rename(columns={"Latitude": "latitude", "Longi
 
 st.write('To visualize the correlations between states, below you can choose a specific state and see a map of the correlation of its WILI time series\
 	with any other state. By looking at a few different states, it is clear that most states are strongly correlated with most of \
-	of the other states in US without necessarily being more correlated with their adjacent ones. However, there are some exceptions like California\
-	which seems to be a lot more correlated to its adjacent states rather than states on the East Coast for example.')
+	of the other states in US without necessarily being more correlated with their adjacent ones. However, there are some exceptions like California,\
+	New Jersey and South Carolina, which seem to be a lot more correlated to their adjacent states than many of the other states are.')
 
 
 column = st.selectbox('Select state that you want to see correlations with respect to.',
