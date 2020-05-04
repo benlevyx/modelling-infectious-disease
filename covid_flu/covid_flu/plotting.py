@@ -2,6 +2,7 @@
 """
 import numpy as np
 import matplotlib.pyplot as plt
+import tensorflow as tf
 
 
 def plot_history(history, ax=None):
@@ -45,3 +46,40 @@ def plot_time_series_prediction(X, y_true, y_pred, ax=None):
 
     ax.set_xlabel('Time step')
     ax.legend()
+
+
+def plot_model_pred(model, X, y=None, idx=None, ax=None, n=1):
+    """
+    Plot time series model predictions.
+
+    Parameters
+    ----------
+    model -- The model to plot
+    X {np.ndarray | tf.data.Dataset} -- Either the history windows or a
+        tensorflow dataset
+    y {None} -- Optional. The true prediction windows. If None, then X
+        must be a tensorflow dataset.
+    idx {int} -- Optional. The index of the time series to plot. X and y must
+        be numpy ndarray's.
+    ax {matplotlib.axes.Axis} -- Optional. The axis to plot on.
+
+    Returns
+    -------
+    None
+    """
+    if ax is not None:
+        axs = [ax]
+    else:
+        fig, axs = plt.subplots(1, n, figsize=(18, 6))
+
+    for ax in axs:
+        if y is None and isinstance(X, tf.data.Dataset):
+            X_eval, y_eval = next(X.unbatch().batch(1).take(1).as_numpy_iterator())
+        else:
+            if not idx:
+                idx = np.random.choice(len(X))
+
+            X_eval = X[idx].reshape(1, -1, 1)
+            y_eval = y[idx].reshape(-1, 1)
+        y_pred = model.predict(X_eval).reshape(-1, 1)
+        plot_time_series_prediction(X_eval, y_eval, y_pred, ax=ax)
