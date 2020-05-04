@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
+from . import time_series
+
 
 def plot_history(history, ax=None):
     """Plot a tensorflow history.
@@ -83,3 +85,18 @@ def plot_model_pred(model, X, y=None, idx=None, ax=None, n=1):
             y_eval = y[idx].reshape(-1, 1)
         y_pred = model.predict(X_eval).reshape(-1, 1)
         plot_time_series_prediction(X_eval, y_eval, y_pred, ax=ax)
+
+
+def plot_model_pred_padded(model, X, ax=None, n=1, max_len=368):
+    if ax is None:
+        axs = plt.subplots(1, n, figsize=(18, 6))
+    else:
+        axs = [ax]
+
+    # Get `n` time series
+    xs = X[np.random.choice(len(X), size=n)]
+    for i in range(n):
+        x, y_true = time_series.prepare_walk_forward_data_variable(xs[i],
+                                                                max_len=max_len,
+                                                                target_len=1)
+        y_pred = model.predict(x)
