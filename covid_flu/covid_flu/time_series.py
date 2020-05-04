@@ -155,6 +155,8 @@ def walk_forward_val(model, ts,
     'score' {float} -- The validated score for this model.
     """
     ts_len = len(ts)
+    if ts.ndim == 1:
+        ts = np.expand_dims(ts, 1)
     window_len = history_size + target_size
     Xs = np.zeros((ts_len - window_len, history_size, ts.shape[1]))
     ys = np.zeros((ts_len - window_len, target_size, ts.shape[1]))
@@ -164,6 +166,8 @@ def walk_forward_val(model, ts,
         ys[offset] = ts[offset + history_size:offset + window_len]
 
     y_preds = model.predict(Xs)
+    if y_preds.ndim != 3:
+        y_preds = np.expand_dims(y_preds, 2)
     mse = np.mean((ys - y_preds) ** 2).flatten()[0]
     if return_count:
         return mse, len(ys)
