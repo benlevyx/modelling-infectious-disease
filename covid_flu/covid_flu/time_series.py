@@ -6,6 +6,7 @@ from tqdm.notebook import tqdm
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 
 # Defining defaults
@@ -30,7 +31,7 @@ def prepare_univariate_time_series(X, input_window, pred_window, offset=0):
     --------
     'X_input', 'X_pred'
     """
-    assert len(X) > offset + input_window + pred_window, \
+    assert len(X) >= offset + input_window + pred_window, \
         f'''Length of time series {len(X)} less than combined
         length of offset {offset}, input_window {input_window}
         and pred_window {pred_window}'''
@@ -87,16 +88,13 @@ def _prepare_ts_single(ts, history_size, target_size):
 
 
 def prepare_and_split_ts(ts, groups=None, history_size=HISTORY_SIZE, target_size=TARGET_SIZE,
-                         test_size=0.2, shuffle=True):
+                         test_size=0.2):
     X_all, y_all = prepare_time_series_data(ts, groups=groups, history_size=history_size, target_size=target_size)
-    if shuffle:
-        X_all = np.shuffle(X_all)
-        y_all = np.shuffle(y_all)
     len_test = int(np.ceil(len(X_all) * test_size))
     return X_all[:-len_test], X_all[-len_test:], y_all[:-len_test], y_all[-len_test:]
 
 
-def _make_datasets(X_train, X_test, y_train, y_test, batch_size=256, buffer_size=1000):
+def make_datasets(X_train, X_test, y_train, y_test, batch_size=256, buffer_size=1000):
     ds_train = tf.data.Dataset.from_tensor_slices((X_train, y_train))
     ds_train = ds_train.cache().shuffle(buffer_size).batch(batch_size)
 
@@ -132,7 +130,7 @@ def prepare_data(ts: np.ndarray,
                                   history_size=history_size,
                                   target_size=target_size,
                                   test_size=test_size)
-    return _make_datasets(*splits)
+    return make_datasets(*splits)
 
 
 def walk_forward_val(model, ts,
@@ -204,3 +202,47 @@ def walk_forward_val_multiple(model, ts_list,
         total_error += mse_state * n_preds
         total_steps += n_preds
     return total_error / total_steps
+
+
+def prepare_walk_forward_data_variable(ts, min_len=None, max_len=None, target_len=1, pad_val=-1) -> tuple:
+    """Process time series `ts` into either an array of padded history
+    sequences and output targets of length `target_len`.
+
+    Parameters
+    ----------
+    ts {np.ndarray} -- The time series to be processed
+    max_len {int} -- The maximum length to pad to
+    target_len {int} -- The size of the targets (prediction window)
+    pad_val {int | float} -- The value to pad with (default -1)
+
+    Returns
+    -------
+    X, y
+    """
+    if not min_len:
+        min_len = 0
+    X, y = [], []
+    for i in range(1, len(ts)):
+        hist, trg = prepare_univariate_time_series(ts, i, target_len, min_len)
+        X.append(hist)
+        y.append(trg)
+    X = pad_sequences(X, maxlen=max_len, value=pad_val)
+    y = np.stack(y, axis=0)
+    return X, y
+
+
+def prepare_all_data_walk_forward(ts_list, min_len=None, max_len=None, target_len=1, pad_val=-1) -> tuple:
+    if not max_len:
+        max_len = max([len(x) for x in ts_list])
+    X, y = [], []
+    for ts in ts_list:
+        x_, y_ = prepare_walk_forward_data_variable(ts,
+                                                    min_len=min_len,
+                                                    max_len=max_len,
+                                                    target_len=target_len,
+                                                    pad_val=pad_val)
+        X.append(x_),
+        y.append(y_)
+    X = np.concatenate(X, axis=0)
+    y = np.concatenate(y, axis=0)
+    return X, y
