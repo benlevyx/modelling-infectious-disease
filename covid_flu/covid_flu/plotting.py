@@ -100,3 +100,36 @@ def plot_model_pred_padded(model, X, ax=None, n=1, max_len=368):
                                                                 max_len=max_len,
                                                                 target_len=1)
         y_pred = model.predict(x)
+
+
+def plot_model_pred_sequential(model, X, ax=None, n=1, max_len=368,
+                               pad_val=-1., min_history_len=50, offset=0,
+                               target_len=5, states=False):
+    if ax is None:
+        fig, axs = plt.subplots(1, n, figsize=(18, 6), sharex=True, sharey=True)
+    else:
+        axs = [ax]
+
+    # Get `n` time series
+    t = np.arange(min_history_len + target_len)
+    idxs = np.random.choice(len(X), size=n)
+    for ax, idx in zip(axs, idxs):
+        x = X[idx]
+        ts = np.full((1, max_len, 1), pad_val, dtype=np.float32)
+        ts[0, :min_history_len] = x[offset:offset + min_history_len]
+        for j in range(target_len):
+            if states:
+                state_vec = np.array([[idx]])
+                y_ = model.predict((ts, state_vec))
+            else:
+                y_ = model.predict(ts)
+            ts[0, min_history_len + j, 0] = y_
+
+        ax.plot(t[:-target_len], x[offset:offset + min_history_len], label='History')
+        ax.plot(t[-target_len:], x[offset + min_history_len:offset + min_history_len + target_len], 'o', color='green', label='True target')
+        ax.plot(t[-target_len:], ts[0, 1:target_len + 1, 0], 'x', color='r', label='Predictions')
+        ax.legend()
+        ax.set_xlabel("Time step")
+        ax.set_ylabel("WILI")
+        if states:
+            ax.set_title(f'State: {idx}')
