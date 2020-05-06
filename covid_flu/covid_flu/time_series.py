@@ -61,20 +61,24 @@ def prepare_time_series_data(ts: np.ndarray,
     -------
     'X_all', 'y_all' {tuple(np.ndarray)} -- History and prediction arrays
     """
-    X_all, y_all = [], []
+    X_all, y_all, states = [], [], []
     if groups is None:
         X_all, y_all = _prepare_ts_single(ts, history_size, target_size)
     else:
         for group in np.unique(groups):
             subset = ts[np.argwhere(groups == group)]
+            subset_states = groups[np.argwhere(groups == group)]
             hist, trg = _prepare_ts_single(subset, history_size, target_size)
+            state = [group]*len(hist)
             X_all.extend(hist)
             y_all.extend(trg)
+            states.extend(state)
 
     X_all = np.stack(X_all, axis=0)
     y_all = np.stack(y_all, axis=0)
+    states = np.stack(states, axis=0)
 
-    return X_all, y_all
+    return X_all, y_all, states
 
 
 def _prepare_ts_single(ts, history_size, target_size):
@@ -89,29 +93,83 @@ def _prepare_ts_single(ts, history_size, target_size):
 
 def prepare_and_split_ts(ts, groups=None, history_size=HISTORY_SIZE, target_size=TARGET_SIZE,
                          test_size=0.2):
-    X_all, y_all = prepare_time_series_data(ts, groups=groups, history_size=history_size, target_size=target_size)
-    len_test = int(np.ceil(len(X_all) * test_size))
-    return X_all[:-len_test], X_all[-len_test:], y_all[:-len_test], y_all[-len_test:]
+    """
+    splits on train, val and test sets by state (i.e. train, val and test has instances from every state)
+    :param ts:
+    :param groups:
+    :param history_size:
+    :param target_size:
+    :param test_size:
+    :return:
+    """
+    X_all, y_all, states = prepare_time_series_data(ts, groups=groups, history_size=history_size, target_size=target_size)
+    X_train = []
+    y_train = []
+    states_train = []
+    X_val = []
+    y_val = []
+    states_val = []
+    X_test = []
+    y_test = []
+    states_test = []
+    for group in np.unique(groups):
+        ts = X_all[states == group]
+        y = y_all[states == group]
+        len_test = int(np.ceil(len(ts) * test_size))
+        ts_train = ts[:-len_test]
+        state_train = [group] * len(ts_train)
+        y_state_train = y[:-len_test]
+        ts_val = ts[-len_test:-len_test + len_test // 2]
+        state_val = [group] * len(ts_val)
+        y_state_val = y[-len_test:-len_test + len_test // 2]
+        ts_test = ts[-len_test + len_test // 2:]
+        y_state_test = y[-len_test + len_test // 2:]
+        state_test = [group] * len(ts_test)
+        X_train.extend(ts_train)
+        X_val.extend(ts_val)
+        X_test.extend(ts_test)
+        y_train.extend(y_state_train)
+        y_val.extend(y_state_val)
+        y_test.extend(y_state_test)
+        states_train.extend(state_train)
+        states_val.extend(state_val)
+        states_test.extend(state_test)
 
+    dict = {}
+    dict['X_train'] = np.stack(X_train, axis=0)
+    dict['X_val'] = np.stack(X_val, axis=0)
+    dict['X_test'] = np.stack(X_test, axis=0)
+    dict['y_train'] = np.stack(y_train, axis=0)
+    dict['y_val'] = np.stack(y_val, axis=0)
+    dict['y_test'] = np.stack(y_test, axis=0)
+    dict['states_train'] = np.stack(states_train, axis=0)
+    dict['states_val'] = np.stack(states_val, axis=0)
+    dict['states_test'] = np.stack(states_test, axis=0)
+    return dict
 
-def make_datasets(X_train, X_test, y_train, y_test, batch_size=256, buffer_size=1000):
+def make_datasets(X_train, X_val,  X_test, y_train, y_val, y_test, batch_size=256, buffer_size=1000):
     ds_train = tf.data.Dataset.from_tensor_slices((X_train, y_train))
     ds_train = ds_train.cache().shuffle(buffer_size).batch(batch_size)
+
+    ds_val = tf.data.Dataset.from_tensor_slices((X_val, y_val))
+    ds_val = ds_val.cache().shuffle(buffer_size).batch(batch_size)
 
     ds_test = tf.data.Dataset.from_tensor_slices((X_test, y_test))
     ds_test = ds_test.cache().shuffle(buffer_size).batch(batch_size)
 
-    return ds_train, ds_test
+    return ds_train, ds_val, ds_test
 
 
 def prepare_data(ts: np.ndarray,
                  groups=None,
                  history_size=HISTORY_SIZE,
                  target_size=TARGET_SIZE,
+                 batch_size=256,
                  test_size=0.2) -> tuple:
     """
     Prepare time series data into history and target windows, splitting into
-    train and test, batched, repeating tensorflow datasets.
+    train val and test, batched, repeating tensorflow datasets. returns a dict with
+    to aid plotting and evaluation later.
 
     Parameters
     ----------
@@ -125,12 +183,20 @@ def prepare_data(ts: np.ndarray,
     -------
     'ds_train', 'ds_test'
     """
-    splits = prepare_and_split_ts(ts,
+    dict = prepare_and_split_ts(ts,
                                   groups=groups,
                                   history_size=history_size,
                                   target_size=target_size,
                                   test_size=test_size)
-    return make_datasets(*splits)
+    X_train = dict['X_train']
+    X_val = dict['X_val']
+    X_test = dict['X_test']
+    y_train = dict['y_train']
+    y_val = dict['y_val']
+    y_test = dict['y_test']
+    ds_train, ds_val, ds_test = make_datasets(X_train, X_val,  X_test, y_train, y_val, y_test, batch_size=batch_size)
+
+    return ds_train, ds_val, ds_test, dict
 
 
 def walk_forward_val(model, ts,
