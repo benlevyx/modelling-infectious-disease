@@ -94,6 +94,60 @@ def prepare_and_split_ts(ts, groups=None, history_size=HISTORY_SIZE, target_size
     return X_all[:-len_test], X_all[-len_test:], y_all[:-len_test], y_all[-len_test:]
 
 
+def train_test_split(ts: np.ndarray, groups=None, test_size=0.2) -> tuple:
+    """Perform a time series train-test split, where the training and testing
+    sets do not overlap temporally.
+
+    Parameters
+    ----------
+    ts -- time series to be split
+    groups -- Optional. Vector identifying which elements in `ts` belong to
+        which group (state)
+    test_size {int} -- The test size as a proportion (0 <= test-size <= 1).
+        Default 0.2
+
+    Returns
+    -------
+    'ts_train', 'ts_test'
+    """
+    train, test = [], []
+    if groups is not None:
+        for group in np.unique(groups):
+            ts_group = ts[np.argwhere(groups == group)]
+            ts_train, ts_test = _train_test_split_single(ts_group, test_size)
+            train.append(ts_train)
+            test.append(ts_test)
+    else:
+        ts_train, ts_test = _train_test_split_single(ts, test_size)
+        train.append(ts_train)
+        test.append(ts_test)
+
+    return train, test
+
+
+def _train_test_split_single(ts, test_size):
+    len_test = int(np.ceil(len(ts) * test_size))
+    return ts[:-len_test], ts[-len_test:]
+
+
+def make_dataset(data, batch_size=256, buffer_size=1000):
+    """Pack data into a tensorflow Dataset.
+
+    Parameters
+    ----------
+    data {tuple} -- Tuple of np.ndarrays
+    batch_size {int}
+    buffer_size {int}
+
+    Returns
+    -------
+    'ds' {tensorflow.data.Dataset}
+    """
+    ds = tf.data.Dataset.from_tensor_slices(data)
+    ds = ds.cache().shuffle(buffer_size).batch(batch_size)
+    return ds
+
+
 def make_datasets(X_train, X_test, y_train, y_test, batch_size=256, buffer_size=1000):
     ds_train = tf.data.Dataset.from_tensor_slices((X_train, y_train))
     ds_train = ds_train.cache().shuffle(buffer_size).batch(batch_size)
@@ -220,10 +274,10 @@ def prepare_walk_forward_data_variable(ts, min_len=None, max_len=None, target_le
     X, y
     """
     if not min_len:
-        min_len = 0
+        min_len = 1
     X, y = [], []
-    for i in range(1, len(ts)):
-        hist, trg = prepare_univariate_time_series(ts, i, target_len, min_len)
+    for i in range(min_len, len(ts) - 1):
+        hist, trg = prepare_univariate_time_series(ts, i, target_len, offset=0)
         X.append(hist)
         y.append(trg)
     X = pad_sequences(X, maxlen=max_len, value=pad_val)
@@ -231,11 +285,33 @@ def prepare_walk_forward_data_variable(ts, min_len=None, max_len=None, target_le
     return X, y
 
 
-def prepare_all_data_walk_forward(ts_list, min_len=None, max_len=None, target_len=1, pad_val=-1) -> tuple:
+def prepare_all_data_walk_forward(ts_list,
+                                  min_len=None,
+                                  max_len=None,
+                                  target_len=1,
+                                  extra_info=None,
+                                  pad_val=-1) -> tuple:
+    """Prepare a walk-forward dataset using a list of time series.
+
+    Parameters
+    ----------
+    ts_list {list} -- Iterable of np.ndarray time series
+    min_len {int} -- Minimum length of a history window
+    max_len {int} -- The maximum length to pad history to
+    target_len {int} -- The window to be predicted
+    extra_info {np.ndarray | list} -- Optional. Extra information to add to
+        each time series.
+    pad_val {int} -- Value to pad with (will be ignored when training model)
+
+    Returns
+    -------
+    X[, extra_info], y
+    """
     if not max_len:
         max_len = max([len(x) for x in ts_list])
     X, y = [], []
-    for ts in ts_list:
+    extra = []
+    for i, ts in enumerate(ts_list):
         x_, y_ = prepare_walk_forward_data_variable(ts,
                                                     min_len=min_len,
                                                     max_len=max_len,
@@ -243,6 +319,12 @@ def prepare_all_data_walk_forward(ts_list, min_len=None, max_len=None, target_le
                                                     pad_val=pad_val)
         X.append(x_),
         y.append(y_)
+        if extra_info is not None:
+            extra.append(np.repeat(extra_info[i], len(y_)))
     X = np.concatenate(X, axis=0)
     y = np.concatenate(y, axis=0)
-    return X, y
+    if extra_info is not None:
+        extra = np.concatenate(extra, axis=0)
+        return (X, extra), y
+    else:
+        return X, y
