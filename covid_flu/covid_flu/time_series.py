@@ -2,7 +2,6 @@
 """
 from typing import Union
 
-from tqdm.notebook import tqdm
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -12,6 +11,126 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 # Defining defaults
 HISTORY_SIZE = 25
 TARGET_SIZE = 1
+
+
+def prepare_time_series_data(ts: np.ndarray,
+                             groups=None,
+                             history_size=HISTORY_SIZE,
+                             target_size=TARGET_SIZE) -> tuple:
+    """
+    Parameters
+    ----------
+    ts {np.ndarray} -- The time series to be prepared
+    groups {np.ndarray} -- An array of groups for each observation (optional)
+    history_size {int} -- Window size for history
+    target_size {int} -- Window size for prediction
+    Returns
+    -------
+    'X_all', 'y_all' {tuple(np.ndarray)} -- History and prediction arrays
+    """
+    X_all, y_all, states = [], [], []
+    if groups is None:
+        X_all, y_all = _prepare_ts_single(ts, history_size, target_size)
+    else:
+        for group in np.unique(groups):
+            subset = ts[np.argwhere(groups == group)]
+            hist, trg = _prepare_ts_single(subset, history_size, target_size)
+            state = [group] * len(hist)
+            X_all.extend(hist)
+            y_all.extend(trg)
+            states.extend(state)
+
+    X_all = np.stack(X_all, axis=0)
+    y_all = np.stack(y_all, axis=0)
+    states = np.stack(states, axis=0)
+
+    return X_all, y_all, states
+
+
+def _prepare_ts_single(ts, history_size, target_size):
+    X_all, y_all = [], []
+    ts_len = len(ts)
+    for i in range(ts_len - history_size - target_size):
+        hist, trg = prepare_univariate_time_series(ts, history_size, target_size, offset=i)
+        X_all.append(hist)
+        y_all.append(trg)
+    return X_all, y_all
+
+
+def prepare_and_split_ts(ts, groups=None, history_size=HISTORY_SIZE, target_size=TARGET_SIZE,
+                         test_size=0.2):
+    """
+    splits on train, val and test sets by state (i.e. train, val and test has instances from every state)
+    :param ts:
+    :param groups:
+    :param history_size:
+    :param target_size:
+    :param test_size:
+    :return:
+    """
+    X_all, y_all, states = prepare_time_series_data(ts, groups=groups, history_size=history_size, target_size=target_size)
+
+    dct = {}
+    for group in np.unique(groups):
+        ts = X_all[states == group]
+        y = y_all[states == group]
+        len_test = int(np.ceil(len(ts) * test_size))
+
+        offset = 0
+        split_lens = [len(ts) - len_test, len_test // 2, len_test - len_test // 2]
+        for split, split_len in zip(('train', 'test', 'val'), split_lens):
+            ts_ = ts[offset:offset + split_len]
+            y_ = y[offset:offset + split_len]
+            group_ = [group] * split_len
+
+            for name, vec in zip(('X', 'y', 'states'), (ts_, y_, group_)):
+                key = f'{name}_{split}'
+                curr = dct.get(key, [])
+                curr.extend(vec)
+                dct[key] = curr
+
+            offset += split_len
+
+    for key in dct:
+        dct[key] = np.stack(dct[key], axis=0)
+    return dct
+
+
+def prepare_data(ts: np.ndarray,
+                 groups=None,
+                 history_size=HISTORY_SIZE,
+                 target_size=TARGET_SIZE,
+                 batch_size=256,
+                 test_size=0.2) -> tuple:
+    """
+    Prepare time series data into history and target windows, splitting into
+    train val and test, batched, repeating tensorflow datasets. returns a dict with
+    to aid plotting and evaluation later.
+    Parameters
+    ----------
+    ts
+    groups
+    history_size
+    target_size
+    test_size
+    Returns
+    -------
+    'ds_train', 'ds_test'
+    """
+    dict = prepare_and_split_ts(ts,
+                                groups=groups,
+                                history_size=history_size,
+                                target_size=target_size,
+                                test_size=test_size)
+
+    res = []
+    for split in ('train', 'val', 'test'):
+        ds = make_dataset((dict[f'X_{split}'], dict[f'y_{split}']), batch_size=batch_size)
+        res.append(ds)
+    ds_train, ds_val, ds_test = res
+
+    return ds_train, ds_val, ds_test, dict
+
 
 
 def prepare_univariate_time_series(X, input_window, pred_window, offset=0):
@@ -42,56 +161,6 @@ def prepare_univariate_time_series(X, input_window, pred_window, offset=0):
     X_pred = X[offset + input_window:offset + input_window + pred_window]
 
     return X_input, X_pred
-
-
-def prepare_time_series_data(ts: np.ndarray,
-                             groups=None,
-                             history_size=HISTORY_SIZE,
-                             target_size=TARGET_SIZE) -> tuple:
-    """
-
-    Parameters
-    ----------
-    ts {np.ndarray} -- The time series to be prepared
-    groups {np.ndarray} -- An array of groups for each observation (optional)
-    history_size {int} -- Window size for history
-    target_size {int} -- Window size for prediction
-
-    Returns
-    -------
-    'X_all', 'y_all' {tuple(np.ndarray)} -- History and prediction arrays
-    """
-    X_all, y_all = [], []
-    if groups is None:
-        X_all, y_all = _prepare_ts_single(ts, history_size, target_size)
-    else:
-        for group in np.unique(groups):
-            subset = ts[np.argwhere(groups == group)]
-            hist, trg = _prepare_ts_single(subset, history_size, target_size)
-            X_all.extend(hist)
-            y_all.extend(trg)
-
-    X_all = np.stack(X_all, axis=0)
-    y_all = np.stack(y_all, axis=0)
-
-    return X_all, y_all
-
-
-def _prepare_ts_single(ts, history_size, target_size):
-    X_all, y_all = [], []
-    ts_len = len(ts)
-    for i in range(ts_len - history_size - target_size):
-        hist, trg = prepare_univariate_time_series(ts, history_size, target_size, offset=i)
-        X_all.append(hist)
-        y_all.append(trg)
-    return X_all, y_all
-
-
-def prepare_and_split_ts(ts, groups=None, history_size=HISTORY_SIZE, target_size=TARGET_SIZE,
-                         test_size=0.2):
-    X_all, y_all = prepare_time_series_data(ts, groups=groups, history_size=history_size, target_size=target_size)
-    len_test = int(np.ceil(len(X_all) * test_size))
-    return X_all[:-len_test], X_all[-len_test:], y_all[:-len_test], y_all[-len_test:]
 
 
 def train_test_split(ts: np.ndarray, groups=None, test_size=0.2) -> tuple:
@@ -146,45 +215,6 @@ def make_dataset(data, batch_size=256, buffer_size=1000):
     ds = tf.data.Dataset.from_tensor_slices(data)
     ds = ds.cache().shuffle(buffer_size).batch(batch_size)
     return ds
-
-
-def make_datasets(X_train, X_test, y_train, y_test, batch_size=256, buffer_size=1000):
-    ds_train = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-    ds_train = ds_train.cache().shuffle(buffer_size).batch(batch_size)
-
-    ds_test = tf.data.Dataset.from_tensor_slices((X_test, y_test))
-    ds_test = ds_test.cache().shuffle(buffer_size).batch(batch_size)
-
-    return ds_train, ds_test
-
-
-def prepare_data(ts: np.ndarray,
-                 groups=None,
-                 history_size=HISTORY_SIZE,
-                 target_size=TARGET_SIZE,
-                 test_size=0.2) -> tuple:
-    """
-    Prepare time series data into history and target windows, splitting into
-    train and test, batched, repeating tensorflow datasets.
-
-    Parameters
-    ----------
-    ts
-    groups
-    history_size
-    target_size
-    test_size
-
-    Returns
-    -------
-    'ds_train', 'ds_test'
-    """
-    splits = prepare_and_split_ts(ts,
-                                  groups=groups,
-                                  history_size=history_size,
-                                  target_size=target_size,
-                                  test_size=test_size)
-    return make_datasets(*splits)
 
 
 def walk_forward_val(model, ts,
