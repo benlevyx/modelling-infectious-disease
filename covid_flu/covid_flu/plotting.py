@@ -104,7 +104,9 @@ def plot_model_pred_padded(model, X, ax=None, n=1, max_len=368):
 
 def plot_model_pred_sequential(model, X, ax=None, n=1, max_len=368,
                                pad_val=-1., min_history_len=50, offset=0,
-                               target_len=5, states=False):
+                               target_len=5, states=False, idxs=None):
+    assert len(idxs) == n, f'Length of indexes provided ({len(idxs)}) does not match requested number of plots ({n}).'
+
     if ax is None:
         fig, axs = plt.subplots(1, n, figsize=(18, 6), sharex=True, sharey=True)
     else:
@@ -112,7 +114,8 @@ def plot_model_pred_sequential(model, X, ax=None, n=1, max_len=368,
 
     # Get `n` time series
     t = np.arange(min_history_len + target_len)
-    idxs = np.random.choice(len(X), size=n)
+    if idxs is None:
+        idxs = np.random.choice(len(X), size=n)
     for ax, idx in zip(axs, idxs):
         x = X[idx]
         ts = np.full((1, max_len, 1), pad_val, dtype=np.float32)
@@ -131,5 +134,4 @@ def plot_model_pred_sequential(model, X, ax=None, n=1, max_len=368,
         ax.legend()
         ax.set_xlabel("Time step")
         ax.set_ylabel("WILI")
-        if states:
-            ax.set_title(f'State: {idx}')
+        ax.set_title(f'State: {idx}')
