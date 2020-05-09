@@ -2,6 +2,7 @@ from IPython.display import display
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error
 
 from . import config
 
@@ -39,3 +40,17 @@ def scale_data(x: np.ndarray, scaler=None):
         scaler = StandardScaler()
     x_sc = scaler.fit_transform(x.reshape(-1, 1)).flatten()
     return x_sc
+
+
+def calc_rmse_model(y_true, x, model, history_length, scaler=None):
+    #calculates unscaled RMSE for a model on a test set
+    preds = model.predict(x)
+    if scaler!=None:
+        y_true = scaler.inverse_transform(y_true.flatten())
+        preds = scaler.inverse_transform(preds)
+    return calculate_rmse(y_true, preds)
+
+
+def calculate_rmse(y_true, y_pred):
+    mse = mean_squared_error(y_true, y_pred)
+    return np.sqrt(mse)

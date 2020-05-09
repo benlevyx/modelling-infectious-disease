@@ -7,6 +7,8 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
+from . import utils
+
 
 # Defining defaults
 HISTORY_SIZE = 25
@@ -16,7 +18,9 @@ TARGET_SIZE = 1
 def prepare_time_series_data(ts: np.ndarray,
                              groups=None,
                              history_size=HISTORY_SIZE,
-                             target_size=TARGET_SIZE) -> tuple:
+                             target_size=TARGET_SIZE,
+                             pad_value=None,
+                             min_history_size=1) -> tuple:
     """
     Parameters
     ----------
@@ -24,6 +28,9 @@ def prepare_time_series_data(ts: np.ndarray,
     groups {np.ndarray} -- An array of groups for each observation (optional)
     history_size {int} -- Window size for history
     target_size {int} -- Window size for prediction
+    pad_value: {int} -- Optional, the value to pad with for windows that
+        extend before the start of the ts. If not supplied, then the time series
+        arrays will start at index `history_size`.
     Returns
     -------
     'X_all', 'y_all' {tuple(np.ndarray)} -- History and prediction arrays
@@ -34,7 +41,7 @@ def prepare_time_series_data(ts: np.ndarray,
     else:
         for group in np.unique(groups):
             subset = ts[np.argwhere(groups == group)]
-            hist, trg = _prepare_ts_single(subset, history_size, target_size)
+            hist, trg = _prepare_ts_single(subset, history_size, target_size, pad_value=pad_value, min_history_size=min_history_size)
             state = [group] * len(hist)
             X_all.extend(hist)
             y_all.extend(trg)
@@ -47,18 +54,84 @@ def prepare_time_series_data(ts: np.ndarray,
     return X_all, y_all, states
 
 
-def _prepare_ts_single(ts, history_size, target_size):
+def _prepare_ts_single(ts, history_size, target_size, pad_value=None, min_history_size=1):
     X_all, y_all = [], []
     ts_len = len(ts)
-    for i in range(ts_len - history_size - target_size):
-        hist, trg = prepare_univariate_time_series(ts, history_size, target_size, offset=i)
-        X_all.append(hist)
-        y_all.append(trg)
+    if pad_value:
+        for i in range(min_history_size, ts_len - target_size):
+            hist, trg = prepare_padded_time_series(ts, history_size, target_size, target_pos=i, pad_value=pad_value)
+            X_all.append(hist)
+            y_all.append(trg)
+    else:
+        for i in range(ts_len - history_size - target_size):
+            hist, trg = prepare_univariate_time_series(ts, history_size, target_size, offset=i)
+            X_all.append(hist)
+            y_all.append(trg)
     return X_all, y_all
 
 
+def prepare_padded_time_series(X, max_history_size, target_size, target_pos=1, pad_value=-1):
+    """Prepare a padded univariate time series.
+
+    Parameters
+    ----------
+    X: {np.ndarray} -- The full time series
+    max_history_size: {int} -- The maximum size of the history window
+    target_size: {int} -- The size of the target window
+    target_pos: {int} -- The position of the beginning of the target window
+    pad_value: {int} -- The value to pad with (default -1)
+
+    Returns
+    -------
+    'hist', 'trg'
+    """
+    assert target_pos + target_size <= len(X), f'Specified target position {target_pos} and target size {target_size} greater than size of X {len(X)}'
+    if X.ndim == 1:
+        X = np.expand_dims(X, 1)
+
+    offset = max(0, target_pos - max_history_size)
+    hist_len = target_pos - offset
+    pad_len = max_history_size - hist_len
+
+    hist = X[offset:target_pos]
+    trg = X[target_pos:target_pos + target_size]
+
+    hist = np.concatenate((hist, np.full((pad_len, 1), pad_value)), axis=0)
+    return hist, trg
+
+
+def prepare_univariate_time_series(X, input_window, pred_window, offset=0):
+    """Prepare a single univariate time series.
+
+    Arguments:
+    ----------
+    X {np.ndarray} -- The input time series
+    input_window {int} -- The window size for training data
+    pred_window {int}  -- The window size for prediction
+
+    Keyword arguments:
+    ------------------
+    offset {int} -- Where to start the time series
+
+    Returns:
+    --------
+    'X_input', 'X_pred'
+    """
+    assert len(X) >= offset + input_window + pred_window, \
+        f'''Length of time series {len(X)} less than combined
+        length of offset {offset}, input_window {input_window}
+        and pred_window {pred_window}'''
+
+    if len(X.shape) == 1:
+        X = np.expand_dims(X, 1)
+    X_input = X[offset:offset + input_window]
+    X_pred = X[offset + input_window:offset + input_window + pred_window]
+
+    return X_input, X_pred
+
+
 def prepare_and_split_ts(ts, groups=None, history_size=HISTORY_SIZE, target_size=TARGET_SIZE,
-                         test_size=0.2):
+                         test_size=0.2, pad_value=None, min_history_size=1):
     """
     splits on train, val and test sets by state (i.e. train, val and test has instances from every state)
     :param ts:
@@ -68,7 +141,11 @@ def prepare_and_split_ts(ts, groups=None, history_size=HISTORY_SIZE, target_size
     :param test_size:
     :return:
     """
-    X_all, y_all, states = prepare_time_series_data(ts, groups=groups, history_size=history_size, target_size=target_size)
+    X_all, y_all, states = prepare_time_series_data(ts, groups=groups,
+                                                    history_size=history_size,
+                                                    target_size=target_size,
+                                                    pad_value=pad_value,
+                                                    min_history_size=min_history_size)
 
     dct = {}
     for group in np.unique(groups):
@@ -101,7 +178,10 @@ def prepare_data(ts: np.ndarray,
                  history_size=HISTORY_SIZE,
                  target_size=TARGET_SIZE,
                  batch_size=256,
-                 test_size=0.2) -> tuple:
+                 test_size=0.2,
+                 pad_value=None,
+                 min_history_size=1,
+                 teacher_forcing=False) -> tuple:
     """
     Prepare time series data into history and target windows, splitting into
     train val and test, batched, repeating tensorflow datasets. returns a dict with
@@ -112,55 +192,39 @@ def prepare_data(ts: np.ndarray,
     groups
     history_size
     target_size
+    batch_size
     test_size
+    pad_value
+    min_history_size
+    teacher_forcing: {bool} whether to prepare the data to use teacher forcing or not.
+
     Returns
     -------
-    'ds_train', 'ds_test'
+
     """
-    dict = prepare_and_split_ts(ts,
-                                groups=groups,
-                                history_size=history_size,
-                                target_size=target_size,
-                                test_size=test_size)
+    dct = prepare_and_split_ts(ts,
+                               groups=groups,
+                               history_size=history_size,
+                               target_size=target_size,
+                               test_size=test_size,
+                               pad_value=pad_value,
+                               min_history_size=min_history_size)
 
     res = []
     for split in ('train', 'val', 'test'):
-        ds = make_dataset((dict[f'X_{split}'], dict[f'y_{split}']), batch_size=batch_size)
+        X, y = dct[f'X_{split}'], dct[f'y_{split}']
+        if teacher_forcing:
+            y_tf = np.zeros_like(y)
+            y_tf[:, 1:, :] = y[:, :-1, :]
+            y_tf[:, 0, :] = X[:, -1, :]
+            data = ((X, y_tf), y)
+        else:
+            data = (X, y)
+        ds = make_dataset(data, batch_size=batch_size)
         res.append(ds)
     ds_train, ds_val, ds_test = res
 
-    return ds_train, ds_val, ds_test, dict
-
-
-
-def prepare_univariate_time_series(X, input_window, pred_window, offset=0):
-    """Prepare a single univariate time series.
-
-    Arguments:
-    ----------
-    X {np.ndarray} -- The input time series
-    input_window {int} -- The window size for training data
-    pred_window {int}  -- The window size for prediction
-
-    Keyword arguments:
-    ------------------
-    offset {int} -- Where to start the time series
-
-    Returns:
-    --------
-    'X_input', 'X_pred'
-    """
-    assert len(X) >= offset + input_window + pred_window, \
-        f'''Length of time series {len(X)} less than combined
-        length of offset {offset}, input_window {input_window}
-        and pred_window {pred_window}'''
-
-    if len(X.shape) == 1:
-        X = np.expand_dims(X, 1)
-    X_input = X[offset:offset + input_window]
-    X_pred = X[offset + input_window:offset + input_window + pred_window]
-
-    return X_input, X_pred
+    return ds_train, ds_val, ds_test, dct
 
 
 def train_test_split(ts: np.ndarray, groups=None, test_size=0.2) -> tuple:
@@ -306,7 +370,7 @@ def prepare_walk_forward_data_variable(ts, min_len=None, max_len=None, target_le
     if not min_len:
         min_len = 1
     X, y = [], []
-    for i in range(min_len, len(ts) - 1):
+    for i in range(min_len, len(ts) - target_len):
         hist, trg = prepare_univariate_time_series(ts, i, target_len, offset=0)
         X.append(hist)
         y.append(trg)
@@ -358,3 +422,16 @@ def prepare_all_data_walk_forward(ts_list,
         return (X, extra), y
     else:
         return X, y
+
+
+def evaluate_multiple_steps_preds(y_true, predicted, scaler):
+    # calculate the rmse for each for each of the steps individualy (i.e. error for one week ahead, 2 weeks ahead and so on)
+    if scaler!=None:
+        y_true = scaler.inverse_transform(y_true)
+        predicted = scaler.inverse_transform(predicted)
+    rmses = []
+    for i in range(predicted.shape[1]):
+        rmse_step = utils.calculate_rmse(y_true[:,i], predicted[:,i])
+        rmses.append(rmse_step)
+    rmses = np.array(rmses)
+    return rmses, rmses.mean()
