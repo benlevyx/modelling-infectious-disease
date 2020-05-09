@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
-from . import time_series
+from . import time_series, utils
 
 
 def plot_history(history, ax=None):
@@ -135,3 +135,55 @@ def plot_model_pred_sequential(model, X, ax=None, n=1, max_len=368,
         ax.set_xlabel("Time step")
         ax.set_ylabel("WILI")
         ax.set_title(f'State: {idx}')
+
+
+def plot_preds_for_state(X_test, y_test, states_test, model, history_length, target_size, state, scaler=None):
+    # plot the preds for target_size weeks ahead skipping every target_size inputs
+    preds = model.predict(X_test[states_test == state])
+    y = y_test[states_test == state]
+    rmses, mean_rmse = time_series.evaluate_multiple_steps_preds(y, preds, scaler)
+    if scaler != None:
+        y = scaler.inverse_transform(y_test[states_test == state])
+        preds = scaler.inverse_transform(preds)
+
+    markers = np.arange(y.shape[0])[::target_size]
+    multiple_step_preds = preds[::target_size, :].flatten()
+    y = y[::target_size, :].flatten()
+    ymarkers = multiple_step_preds[::target_size]
+
+    print(f"RMSES for each step = {rmses}, average = {mean_rmse}")
+
+    plt.figure(figsize=(10, 8))
+    plt.plot(y, 'b-', label='True')
+    plt.plot(multiple_step_preds, 'r-', label='Predicted')
+    plt.plot(markers, ymarkers, '+', color='k', label='Anchor points')
+    plt.legend()
+    plt.xlabel('Time')
+    plt.ylabel('WILI')
+    plt.title(f'True vs {target_size}-steps prediction for {state}')
+
+
+def plot_state_predictions_multi(model, data_dict, state, target_size, scaler=None):
+    state_subset = data_dict['states_test'] == state
+    X_te = data_dict['X_test'][state_subset]
+    yhat = model.predict(X_te)[::target_size].flatten()
+    y_te = data_dict['y_test'][state_subset][::target_size].flatten()
+    X_te = X_te[0].flatten()
+
+    if scaler is not None:
+        y_te = scaler.inverse_transform(y_te)
+        yhat = scaler.inverse_transform(yhat)
+        X_te = scaler.inverse_transform(X_te)
+
+    t = np.arange(len(X_te) + len(y_te))
+    tpre = t[:len(X_te)]
+    tpost = t[-len(yhat):]
+
+    X_te = np.append(X_te, y_te[0])
+    tpre = np.append(tpre, len(tpre))
+
+    for i in range(0, len(yhat), target_size):
+        plt.plot(tpre, X_te, color='black')
+        plt.plot(tpost, y_te, label='Ground truth', color='green')
+        plt.plot(tpost, yhat, 'x', color='red', label='Predictions')
+    plt.title(state)
