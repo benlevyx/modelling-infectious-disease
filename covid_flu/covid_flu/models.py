@@ -159,6 +159,27 @@ class Seq2Seq:
 
         return decoded_seq
 
+    def predict(self, X, pred_steps=None):
+        if not pred_steps:
+            pred_steps = self.target_length
+        if X.ndim == 2:
+            X = np.expand_dims(X, 0)
+
+        states_value = self.encoder_model.predict(X)
+        target_seq = np.zeros((X.shape[0], 1, 1))
+        target_seq[:, 0, 0] = X[:, -1, 0]
+        decoded = np.zeros((X.shape[0], pred_steps, 1))
+
+        for i in range(pred_steps):
+            output, h, c = self.decoder_model.predict([target_seq] + states_value)
+            decoded[:, i, 0] = output[:, 0, 0]
+            target_seq = np.zeros((X.shape[0], 1, 1))
+            target_seq[:, 0, 0] = output[:, 0, 0]
+
+            states_value = [h, c]
+
+        return decoded
+
     def summary(self):
         self.training_network.summary()
 
