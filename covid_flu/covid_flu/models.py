@@ -55,16 +55,22 @@ class Seq2Seq:
         self.pre_output_dense_size = pre_output_dense_size
         self.dropout = dropout
 
-        self.training_network, self.encoder_model, decoder_inputs, decoder_lstm, decoder_dense = self.build_training_network()
-        self.decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_dense)
+        self.training_network, self.encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense = \
+            self.build_training_network()
+        self.decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
 
-    def build_training_network(self):
+    def build_training_network(self, transfer_layers=None, transfer_model=None):
         # Building the model
         # Taken from https://blog.keras.io/a-ten-minute-introduction-to-sequence-to-sequence-learning-in-keras.html
         # and https://github.com/JEddy92/TimeSeries_Seq2Seq/blob/master/notebooks/TS_Seq2Seq_Intro.ipynb
         encoder_inputs = Input(shape=(self.history_length, 1))
-        encoder = layers.LSTM(self.hidden_size, return_state=True, activation='tanh')
+        encoder = layers.LSTM(self.hidden_size, return_state=True, activation='tanh', name='encoder')
+        if transfer_layers:
+            encoder.set_weights(transfer_layers['encoder'].get_weights())
+            encoder.trainable = False
+
         encoder_outputs, state_h, state_c = encoder(encoder_inputs)
+
         # We discard `encoder_outputs` and only keep the states.
         encoder_states = [state_h, state_c]
 
@@ -73,22 +79,38 @@ class Seq2Seq:
         # We set up our decoder to return full output sequences,
         # and to return internal states as well. We don't use the
         # return states in the training model, but we will use them in inference.
-        decoder_lstm = layers.LSTM(self.hidden_size, return_sequences=True, return_state=True, activation='tanh')
+        decoder_lstm = layers.LSTM(self.hidden_size, return_sequences=True, return_state=True, activation='tanh',
+                                   name='decoder_lstm')
+        if transfer_layers:
+            decoder_lstm.set_weights(transfer_layers['decoder_lstm'].get_weights())
+            decoder_lstm.trainable = False
+
         decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state=encoder_states)
-        decoder_dense = layers.Dense(1, activation='linear')
-        decoder_outputs = decoder_dense(decoder_outputs)
+        decoder_pre_output = layers.Dense(self.pre_output_dense_size, activation='relu',
+                                          name='decoder_pre_output')
+        decoder_dense = layers.Dense(1, activation='linear', name='decoder_dense')
+        if transfer_layers:
+            decoder_pre_output.set_weights(transfer_layers['decoder_pre_output'].get_weights())
+            decoder_dense.set_weights(transfer_layers['decoder_dense'].get_weights())
+
+        decoder_pre_outputs = decoder_pre_output(decoder_outputs)
+        decoder_outputs = decoder_dense(decoder_pre_outputs)
 
         # Define the model that will turn
         # `encoder_input_data` & `decoder_input_data` into `decoder_target_data`
         model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
 
+        if transfer_model is not None:
+            model.set_weights(transfer_model.get_weights())
+            for layer in model.layers[:-2]:
+                layer.trainable = False
         model.compile(optimizer='adam', loss='mse')
 
         encoder_model = Model(encoder_inputs, encoder_states)
 
-        return model, encoder_model, decoder_inputs, decoder_lstm, decoder_dense
+        return model, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense
 
-    def build_inference_network(self, decoder_inputs, decoder_lstm, decoder_dense):
+    def build_inference_network(self, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense):
         decoder_state_input_h = Input(shape=(self.hidden_size,))
         decoder_state_input_c = Input(shape=(self.hidden_size,))
         decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
@@ -96,7 +118,8 @@ class Seq2Seq:
         decoder_outputs, state_h, state_c = decoder_lstm(decoder_inputs, initial_state=decoder_states_inputs)
         decoder_states = [state_h, state_c]
 
-        decoder_outputs = decoder_dense(decoder_outputs)
+        decoder_pre_outputs = decoder_pre_output(decoder_outputs)
+        decoder_outputs = decoder_dense(decoder_pre_outputs)
         decoder_model = Model([decoder_inputs] + decoder_states_inputs,
                               [decoder_outputs] + decoder_states)
 
@@ -140,6 +163,31 @@ class Seq2Seq:
 
     def fit(self, *args, **kwargs):
         return self.training_network.fit(*args, **kwargs)
+
+    def transfer(self):
+        # transfer_layers = {}
+        # for layer in self.training_network.layers:
+        #     if 'dense' in layer.name:
+        #         layer.trainable = True
+        #     else:
+        #         layer.trainable = False
+        #     transfer_layers[layer.name] = layer
+
+        training_network, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense = \
+            self.build_training_network(transfer_model=self.training_network)
+        decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
+
+        model = Seq2Seq(history_length=self.history_length,
+                        target_length=self.target_length,
+                        num_encoder_layers=self.num_encoder_layers,
+                        num_decoder_layers=self.num_decoder_layers,
+                        hidden_size=self.hidden_size,
+                        pre_output_dense_size=self.pre_output_dense_size,
+                        dropout=self.dropout)
+        model.training_network = training_network
+        model.decoder_model = decoder_model
+
+        return model
 
 
 def build_seq2seq_with_attention(history_length=25,

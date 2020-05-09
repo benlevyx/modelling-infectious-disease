@@ -187,3 +187,28 @@ def plot_state_predictions_multi(model, data_dict, state, target_size, scaler=No
         plt.plot(tpost, y_te, label='Ground truth', color='green')
         plt.plot(tpost, yhat, 'x', color='red', label='Predictions')
     plt.title(state)
+
+
+def plot_seq2seq_preds(model, data_dict, state, pred_steps, split='test', scaler=None):
+    state_subset = data_dict[f'states_{split}'] == state
+    X_te = data_dict[f'X_{split}'][state_subset][0:1]
+    yhat = model.decode_sequence(X_te, pred_steps).flatten()
+    trg_len = len(data_dict[f'y_{split}'][state_subset][0].flatten())
+    y_true = data_dict[f'y_{split}'][state_subset][::trg_len].flatten()[:pred_steps]
+
+    X_te_tail = np.concatenate((X_te.flatten(), [y_true[0]]))
+
+    X_te_tail = scaler.inverse_transform(X_te_tail)
+    yhat = scaler.inverse_transform(yhat)
+    y_true = scaler.inverse_transform(y_true)
+
+    t = np.arange(len(X_te_tail) - 1 + pred_steps)
+    tpre = t[:len(X_te_tail)]
+    tpost = t[-pred_steps:]
+
+    plt.plot(tpre, X_te_tail, color='k', label='History')
+    plt.plot(tpost, y_true, color='blue', label='Ground truth')
+    plt.plot(tpost, yhat, 'x', color='r', label='Predictions')
+
+    plt.xlabel("Time step")
+    plt.legend()
