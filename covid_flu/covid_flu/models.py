@@ -59,39 +59,39 @@ class Seq2Seq:
             self.build_training_network()
         self.decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
 
-    def build_training_network(self, transfer_layers=None, transfer_model=None):
+    def build_training_network(self, transfer_model=None):
         # Building the model
         # Taken from https://blog.keras.io/a-ten-minute-introduction-to-sequence-to-sequence-learning-in-keras.html
         # and https://github.com/JEddy92/TimeSeries_Seq2Seq/blob/master/notebooks/TS_Seq2Seq_Intro.ipynb
         encoder_inputs = Input(shape=(self.history_length, 1))
-        encoder = layers.LSTM(self.hidden_size, return_state=True, activation='tanh', name='encoder')
-        if transfer_layers:
-            encoder.set_weights(transfer_layers['encoder'].get_weights())
-            encoder.trainable = False
 
+        if self.num_encoder_layers == 1:
+            encoder = layers.LSTM(self.hidden_size, activation='tanh', dropout=self.dropout, name='encoder_lstm',
+                                  return_sequences=True, return_state=True)
+        else:
+            cells = [layers.LSTMCell(self.hidden_size, activation='tanh', dropout=self.dropout) for _ in range(self.num_encoder_layers)]
+            stacked = layers.StackedRNNCells(cells)
+            encoder = layers.RNN(stacked, return_sequences=True, return_state=True, name='encoder_lstm')
         encoder_outputs, state_h, state_c = encoder(encoder_inputs)
 
         # We discard `encoder_outputs` and only keep the states.
-        encoder_states = [state_h, state_c]
+        if self.num_encoder_layers == 1:
+            encoder_states = [state_h, state_c]
+        else:
+            encoder_states = [state_h[-1], state_c[-1]]
 
         # Set up the decoder, using `encoder_states` as initial state.
         decoder_inputs = Input(shape=(None, 1))
         # We set up our decoder to return full output sequences,
         # and to return internal states as well. We don't use the
         # return states in the training model, but we will use them in inference.
+        # NOTE: this only supports a single decoder layer at the moment
         decoder_lstm = layers.LSTM(self.hidden_size, return_sequences=True, return_state=True, activation='tanh',
                                    name='decoder_lstm')
-        if transfer_layers:
-            decoder_lstm.set_weights(transfer_layers['decoder_lstm'].get_weights())
-            decoder_lstm.trainable = False
-
         decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state=encoder_states)
-        decoder_pre_output = layers.Dense(self.pre_output_dense_size, activation='relu',
-                                          name='decoder_pre_output')
+
+        decoder_pre_output = layers.Dense(self.pre_output_dense_size, activation='relu', name='decoder_pre_output')
         decoder_dense = layers.Dense(1, activation='linear', name='decoder_dense')
-        if transfer_layers:
-            decoder_pre_output.set_weights(transfer_layers['decoder_pre_output'].get_weights())
-            decoder_dense.set_weights(transfer_layers['decoder_dense'].get_weights())
 
         decoder_pre_outputs = decoder_pre_output(decoder_outputs)
         decoder_outputs = decoder_dense(decoder_pre_outputs)
@@ -116,6 +116,7 @@ class Seq2Seq:
         decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
 
         decoder_outputs, state_h, state_c = decoder_lstm(decoder_inputs, initial_state=decoder_states_inputs)
+
         decoder_states = [state_h, state_c]
 
         decoder_pre_outputs = decoder_pre_output(decoder_outputs)
@@ -157,6 +158,27 @@ class Seq2Seq:
             states_value = [h, c]
 
         return decoded_seq
+
+    def predict(self, X, pred_steps=None):
+        if not pred_steps:
+            pred_steps = self.target_length
+        if X.ndim == 2:
+            X = np.expand_dims(X, 0)
+
+        states_value = self.encoder_model.predict(X)
+        target_seq = np.zeros((X.shape[0], 1, 1))
+        target_seq[:, 0, 0] = X[:, -1, 0]
+        decoded = np.zeros((X.shape[0], pred_steps, 1))
+
+        for i in range(pred_steps):
+            output, h, c = self.decoder_model.predict([target_seq] + states_value)
+            decoded[:, i, 0] = output[:, 0, 0]
+            target_seq = np.zeros((X.shape[0], 1, 1))
+            target_seq[:, 0, 0] = output[:, 0, 0]
+
+            states_value = [h, c]
+
+        return decoded
 
     def summary(self):
         self.training_network.summary()
