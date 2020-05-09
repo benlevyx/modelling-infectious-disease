@@ -189,7 +189,9 @@ def plot_state_predictions_multi(model, data_dict, state, target_size, scaler=No
     plt.title(state)
 
 
-def plot_seq2seq_preds(model, data_dict, state, pred_steps, split='test', scaler=None):
+def plot_seq2seq_preds(model, data_dict, state, pred_steps, split='test', scaler=None, ax=None):
+    if ax is None:
+        ax = plt.gca()
     state_subset = data_dict[f'states_{split}'] == state
     X_te = data_dict[f'X_{split}'][state_subset][0:1]
     yhat = model.decode_sequence(X_te, pred_steps).flatten()
@@ -206,9 +208,9 @@ def plot_seq2seq_preds(model, data_dict, state, pred_steps, split='test', scaler
     tpre = t[:len(X_te_tail)]
     tpost = t[-pred_steps:]
 
-    plt.plot(tpre, X_te_tail, color='k', label='History')
-    plt.plot(tpost, y_true, color='blue', label='Ground truth')
-    plt.plot(tpost, yhat, 'x', color='r', label='Predictions')
+    ax.plot(tpre, X_te_tail, color='k', label='History')
+    ax.plot(tpost, y_true, color='blue', label='Ground truth')
+    ax.plot(tpost, yhat, 'x', color='r', label='Predictions')
 
-    plt.xlabel("Time step")
-    plt.legend()
+    ax.set_xlabel("Time step")
+    ax.legend()
