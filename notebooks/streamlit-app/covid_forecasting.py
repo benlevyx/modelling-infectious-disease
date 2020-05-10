@@ -5,6 +5,8 @@ import os
 import sys
 import pandas as pd
 from sklearn.linear_model import Lasso
+from sklearn.metrics import mean_squared_error
+from PIL import Image
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
@@ -24,7 +26,6 @@ def main():
              'released a publicly available dataset (source:https://data.humdata.org/dataset/nyt-covid-19-data). It contains the daily number of recorded cases per US '
              'state since January 21 2020, which was the date of the first confirmed case in the US.')\
 
-    @st.cache
     def fetch_and_clean_data():
         flu_dir = config.data / 'raw'
         filename = 'Covid_data.csv'
@@ -188,17 +189,85 @@ def main():
 
     print_lasso_states()
 
-    st.markdown('This seems to make sense! So let\s continue using these coefficients.')
+    st.markdown('This seems to make sense! So let\'s continue using these coefficients.')
 
-    covid_data.drop(['Unnamed: 0', 'date', 'Alaska','District of Columbia', 'Hawaii'], axis = 1,
-                    inplace = True)
+    covid_data = covid_data.drop(['Unnamed: 0', 'date', 'Alaska','District of Columbia', 'Hawaii',
+                                  'Guam', 'Florida', 'Northern Mariana Islands',
+                                  'Virgin Islands', 'Puerto Rico'], axis = 1)
 
     st.markdown('Using this, we can now start building the CAR model. We will first do so by predicting '
                 'one day ahead using one day lag. The model can then be implemented with an MCMC using PyMC3. '
-                'For details on the implementation, it is recommended to have a look at the notebook on Github.')
+                'For details on the implementation, it is recommended to have a look at the notebook on Github.'
+                ' Below you can view the one day ahead predictions per state.')
+
+    CAR_model_lag1 = pd.read_csv(config.data / 'processed' / 'CARModelLag1.csv')
+    CAR_model_lag1.set_index('Unnamed: 0', inplace = True)
+
+    params_dict = dict()
+
+    for k, state_name in enumerate(covid_data.columns):
+        params_k = [CAR_model_lag1['mean']['beta0[{}]'.format(k)],
+                    CAR_model_lag1['mean']['betas[{}]'.format(k)],
+                    CAR_model_lag1['mean']['phi[{}]'.format(k)]]
+        params_dict[state_name] = params_k
+
+    state = st.selectbox('Select state for which you wish to see the CAR predictions. It may take a second.',
+		 covid_data.columns)
 
 
-    
+    def lag1_pred(state):
+        # predict
+        pred_state = []
+        for i, day in enumerate(range(start + lag, len(covid_data) - pred_ahead)):
+            params = params_dict[state]
+            lag_X = covid_data[state][day]/covid_data[state][day-1]
+            log_pred = params[0] + params[1]*lag_X + params[2]
+            pred = np.exp(log_pred)
+            T_pred = pred*covid_data[state][day]
+            pred_state.append(T_pred)
+
+        # rmse = np.sqrt(mean_squared_error(pred_state,
+        #                          covid_data[state].iloc[start + lag: len(covid_data) - pred_ahead]))
+        # rmse = np.round(rmse, 3)
+
+        return pred_state#, rmse
+
+    # plot
+    pred_ahead = 1
+    lag = 1
+    start = 56
+    pred_state = lag1_pred(state)
+    fig2 = plt.figure(figsize = (12,8))
+    plt.plot(range(start, len(covid_data[state])), covid_data[state][start:], label = 'Real data')
+    plt.plot(range(start+2, len(covid_data[state])),
+             pred_state, label = '1 lag CAR prediction')
+    plt.title('CAR predictions of Covid cases for {}'.format(state), fontsize = 20)
+    plt.xlabel('Day since Jan 21 2020', fontsize = 20)
+    plt.ylabel('# cases', fontsize = 20)
+    plt.legend(fontsize = 20)
+    st.pyplot(fig2)
+
+    st.markdown('Overall, the one day ahead predictions of the CAR model look very solid. Additionally,'
+                ' the average RMSE on the test set was equal to 586.4, which is, considering the large '
+                'number of cases, not too bad. It is now interesting to dive into trained the trained parameters'
+                ' of the CAR model. For each state $i$, a local regression coefficient $\\beta_i$'
+                ' and a spatial parameter $z_i$. The following plot illustrates how these parameters are spread over the'
+                'states. Note that the marker size in the scatter plot is proportional to the total number of cases that were last '
+                'recorded in that state.')
+
+    img = Image.open(config.notebooks/'streamlit-app'/'images'/'StatesAnnotCar1.png')
+    st.image(img, caption='', format='PNG', width=750)
+
+    st.markdown('From the figure, we would hope to discover that states with a similar spread of Covid-19, would'
+                ' be grouped together. This is not entirely the case, but it is cool to see how for instance the '
+                'New York is clearly an outlier, which makes total sense given its extreme Covid history.')
+
+
+
+
+
+
+
 if __name__ == "__main__":
     main()
 
