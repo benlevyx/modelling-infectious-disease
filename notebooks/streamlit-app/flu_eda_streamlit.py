@@ -15,9 +15,6 @@ from covid_flu import config
 def main():
 	st.title('Flu Data EDA')
 
-	st.write('## Authors: Dimitris Vamvourellis, Benjamin Levy, Will Fried, Matthieu Meeus')
-
-
 	st.write('## Data Loading')
 	st.write('First we will load the data from all states into one single dataframe. Basically, for each state\
 			  (except for Florida) we have the weekly influenza-like illness (WILI) rate for the last 10 years.\
