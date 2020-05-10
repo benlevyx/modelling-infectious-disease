@@ -37,6 +37,9 @@ def load_covid_data():
 
 def load_state_data():
     state_data = pd.read_csv(config.state_stats / 'state_stats.csv')
+    latlon = pd.read_csv(config.state_stats / 'statelatlong.csv')[['State', 'City']]
+    state_data = pd.merge(state_data, latlon, left_index=True, right_on='State')
+    state_data = state_data.rename(columns={'City': 'state'})
     return state_data
 
 
