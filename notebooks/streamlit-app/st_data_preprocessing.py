@@ -17,7 +17,7 @@ from covid_flu import config
 def main():
 	st.title('Data Preprocessing')
 
-	st.write("The full notebook can be found [here](https://github.com/benlevyx/modelling-infectious-disease/tree/master/notebooks/data_preprocessing.ipynb)")
+	st.write("The full notebook can be found [here](https://github.com/benlevyx/modelling-infectious-disease/tree/master/notebooks/data_preprocessing.ipynb).")
 
 	st.write("### Preprocessing of flu wILI time series data")
 
