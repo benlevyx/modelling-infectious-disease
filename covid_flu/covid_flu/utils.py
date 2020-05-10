@@ -53,15 +53,15 @@ def scale_data(x: np.ndarray, scaler=None):
     return x_sc
 
 
-def calc_rmse_model(y_true, x, model, history_length, scaler=None):
-    #calculates unscaled RMSE for a model on a test set
+def calc_rmse_model(y_true, x, model, scaler=None):
     preds = model.predict(x)
-    if scaler!=None:
+    if scaler is not None:
         y_true = scaler.inverse_transform(y_true.flatten())
-        preds = scaler.inverse_transform(preds)
+        preds = scaler.inverse_transform(preds.flatten())
     return calculate_rmse(y_true, preds)
 
 
 def calculate_rmse(y_true, y_pred):
-    mse = mean_squared_error(y_true, y_pred)
+    # mse = mean_squared_error(y_true, y_pred)
+    mse = np.mean((y_true - y_pred) ** 2)
     return np.sqrt(mse)
