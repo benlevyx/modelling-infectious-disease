@@ -16,3 +16,6 @@ from covid_flu import config
 def main():
     st.title('Homepage')
 
+    st.write('## Authors: Dimitris Vamvourellis, Benjamin Levy, Will Fried, Matthieu Meeus')
+
+
