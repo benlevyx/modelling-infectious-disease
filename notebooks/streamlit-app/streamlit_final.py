@@ -7,6 +7,7 @@ import st_causal_analysis as ca
 import st_flu_forecasting as flu_forcast
 import covid_forecasting as covid
 import st_conclusion as concl
+import st_transfer_learning as tl
 
 
 def main():
@@ -16,6 +17,7 @@ def main():
                                                   "Causal Analysis",
                                                   "Flu Forecasting",
                                                   "COVID-19 Forecasting",
+                                                  "COVID-19 Transfer Learning",
                                                   "Conclusion"])
     if page == "Homepage":
         hp.main()
@@ -27,8 +29,10 @@ def main():
         ca.main()
     elif page == "Flu Forecasting":
         flu_forcast.main()
-    if page == "COVID-19 Forecasting":
+    elif page == "COVID-19 Forecasting":
         covid.main()
+    elif page == "COVID-19 Transfer Learning":
+        tl.main()
     elif page == "Conclusion":
         concl.main()
 
