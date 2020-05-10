@@ -23,8 +23,8 @@ def display_all(df):
 
 
 def load_flu_data():
-    return pd.read_csv(config.processed / 'flu_ground_truth_imputed.csv')
-
+    flu_data = pd.read_csv(config.processed / 'flu_ground_truth_imputed.csv')
+    return flu_data
 
 def load_covid_data():
     covid_data = pd.read_csv(config.raw / 'Covid_data.csv', index_col=0)
@@ -32,6 +32,9 @@ def load_covid_data():
     covid_data.columns = ['date', 'state', 'cases']
     covid_data = covid_data.fillna(0.)
     covid_data['date'] = pd.to_datetime(covid_data['date'])
+    # Switching to new cases
+    covid_data['total_cases'] = covid_data['cases']
+    covid_data['cases'] = covid_data['total_cases'] - covid_data['total_cases'].shift(1, fill_value=0)
     return covid_data
 
 
@@ -50,15 +53,23 @@ def scale_data(x: np.ndarray, scaler=None):
     return x_sc
 
 
-def calc_rmse_model(y_true, x, model, history_length, scaler=None):
-    #calculates unscaled RMSE for a model on a test set
+def calc_rmse_model(y_true, x, model, scaler=None):
     preds = model.predict(x)
-    if scaler!=None:
+    if scaler is not None:
         y_true = scaler.inverse_transform(y_true.flatten())
-        preds = scaler.inverse_transform(preds)
+        preds = scaler.inverse_transform(preds.flatten())
     return calculate_rmse(y_true, preds)
 
 
 def calculate_rmse(y_true, y_pred):
-    mse = mean_squared_error(y_true, y_pred)
+    # mse = mean_squared_error(y_true, y_pred)
+    mse = np.mean((y_true - y_pred) ** 2)
     return np.sqrt(mse)
+
+
+def save_weights(model, name):
+    model.training_network.save_weights(str(config.models / f'{name}.h5'))
+
+
+def load_weights(model, name):
+    model.training_network.load_weights(str(config.models / f'{name}.h5'))

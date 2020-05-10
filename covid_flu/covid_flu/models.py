@@ -66,7 +66,7 @@ class Seq2Seq:
                 self.bridge = self.build_training_network()
             self.decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
 
-    def build_training_network(self, transfer_model=None):
+    def build_training_network(self, transfer_model=None, transfer_mode='freeze'):
         # Building the model
         # Taken from https://blog.keras.io/a-ten-minute-introduction-to-sequence-to-sequence-learning-in-keras.html
         # and https://github.com/JEddy92/TimeSeries_Seq2Seq/blob/master/notebooks/TS_Seq2Seq_Intro.ipynb
@@ -126,8 +126,9 @@ class Seq2Seq:
 
         if transfer_model is not None:
             model.set_weights(transfer_model.get_weights())
-            for layer in model.layers[:-2]:
-                layer.trainable = False
+            if transfer_mode == 'freeze':
+                for layer in model.layers[:-2]:
+                    layer.trainable = False
         model.compile(optimizer='adam', loss='mse')
 
         encoder_model = Model(encoder_inputs, encoder_states)
@@ -222,14 +223,17 @@ class Seq2Seq:
     def fit(self, *args, **kwargs):
         return self.training_network.fit(*args, **kwargs)
 
-    def transfer(self):
+    def transfer(self, freeze=True):
+        transfer_mode = 'freeze' if freeze else 'unfreeze'
         if self.state_embed_size:
             training_network, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense, \
-                bridge, state_embed_layer, state_embed_model = self.build_training_network()
+                bridge, state_embed_layer, state_embed_model = self.build_training_network(transfer_model=self.training_network,
+                                                                                           transfer_mode=transfer_mode)
             decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
         else:
             training_network, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense, \
-                bridge = self.build_training_network()
+                bridge = self.build_training_network(transfer_model=self.training_network,
+                                                     transfer_mode=transfer_mode)
             decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
 
 
@@ -243,7 +247,17 @@ class Seq2Seq:
         model.training_network = training_network
         model.decoder_model = decoder_model
         if self.state_embed_size:
+            state_inputs = Input(shape=(1,))
+            state_embed_layer_ = layers.Embedding(53, self.state_embed_size,
+                                                  weights=state_embed_layer.get_weights(),
+                                                  trainable=False)
+            state_embeds = state_embed_layer_(state_inputs)
+
+            state_embeds = layers.Flatten()(state_embeds)
+
+            state_embed_model = Model(state_inputs, state_embeds)
             model.state_embed_model = state_embed_model
+            # model.state_embed_model = tf.keras.models.clone_model(state_embed_model)
 
         return model
 
