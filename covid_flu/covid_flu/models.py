@@ -247,7 +247,17 @@ class Seq2Seq:
         model.training_network = training_network
         model.decoder_model = decoder_model
         if self.state_embed_size:
+            state_inputs = Input(shape=(1,))
+            state_embed_layer_ = layers.Embedding(53, self.state_embed_size,
+                                                  weights=state_embed_layer.get_weights(),
+                                                  trainable=False)
+            state_embeds = state_embed_layer_(state_inputs)
+
+            state_embeds = layers.Flatten()(state_embeds)
+
+            state_embed_model = Model(state_inputs, state_embeds)
             model.state_embed_model = state_embed_model
+            # model.state_embed_model = tf.keras.models.clone_model(state_embed_model)
 
         return model
 
