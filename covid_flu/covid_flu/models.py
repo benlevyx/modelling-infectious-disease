@@ -72,27 +72,9 @@ class Seq2Seq:
         for i in range(self.num_encoder_layers):
             x, state_h, state_c = layers.LSTM(self.hidden_size, activation='tanh', dropout=self.dropout,
                                               name=f'encoder_lstm{i}', return_sequences=True, return_state=True)(x)
-        encoder_outputs = x
-
-        # if self.num_encoder_layers == 1:
-        #     encoder = layers.LSTM(self.hidden_size, activation='tanh', dropout=self.dropout, name='encoder_lstm',
-        #                           return_sequences=True, return_state=True)
-        # else:
-        #     cells = [layers.LSTMCell(self.hidden_size, activation='tanh', dropout=self.dropout) for _ in range(self.num_encoder_layers)]
-        #     stacked = layers.StackedRNNCells(cells)
-        #     encoder = layers.RNN(stacked, return_sequences=True, return_state=True, name='encoder_lstm')
-        # print(encoder(encoder_inputs))
-
-        # encoder_outputs, state_h, state_c = encoder(encoder_inputs)
-
 
         # We discard `encoder_outputs` and only keep the states.
         encoder_states = [state_h, state_c]
-        # if self.num_encoder_layers == 1:
-        #     encoder_states = [state_h, state_c]
-        # else:
-        #     encoder_states = [state_h[-1], state_c[-1]]
-        # encoder_states = tf.stack(encoder_states, axis=0)
 
         # Set up the decoder, using `encoder_states` as initial state.
         decoder_inputs = Input(shape=(None, 1))
