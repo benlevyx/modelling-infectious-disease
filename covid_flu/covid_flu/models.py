@@ -46,8 +46,7 @@ class Seq2Seq:
                  hidden_size=32,
                  pre_output_dense_size=16,
                  dropout=0,
-                 state_input_size=None,
-                 state_hidden_size=None):
+                 state_embed_size=None):
 
         self.history_length = history_length
         self.target_length = target_length
@@ -56,10 +55,16 @@ class Seq2Seq:
         self.hidden_size = hidden_size
         self.pre_output_dense_size = pre_output_dense_size
         self.dropout = dropout
+        self.state_embed_size = state_embed_size
 
-        self.training_network, self.encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense = \
-            self.build_training_network()
-        self.decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
+        if self.state_embed_size:
+            self.training_network, self.encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense, \
+                self.bridge, state_embed_layer, self.state_embed_model = self.build_training_network()
+            self.decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
+        else:
+            self.training_network, self.encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense, \
+                self.bridge = self.build_training_network()
+            self.decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
 
     def build_training_network(self, transfer_model=None):
         # Building the model
@@ -76,6 +81,25 @@ class Seq2Seq:
         # We discard `encoder_outputs` and only keep the states.
         encoder_states = [state_h, state_c]
 
+        bridge = layers.Dense(2 * self.hidden_size)
+        if self.state_embed_size:
+            # Just hard-coding the number of states
+            state_inputs = Input(shape=(1,))
+            state_embed_layer = layers.Embedding(53, self.state_embed_size)
+            state_embeds = state_embed_layer(state_inputs)
+            state_embeds = layers.Flatten()(state_embeds)
+            state_embed_model = Model(state_inputs, state_embeds)
+
+            x = layers.Concatenate(axis=-1)([state_h, state_c, state_embeds])
+            x = bridge(x)
+
+            decoder_init = layers.Lambda(lambda t: tf.split(t, 2, axis=-1))(x)
+        else:
+            x = layers.Concatenate(axis=-1)([state_h, state_c])
+            x = bridge(x)
+            decoder_init = layers.Lambda(lambda t: tf.split(t, 2, axis=-1))(x)
+
+
         # Set up the decoder, using `encoder_states` as initial state.
         decoder_inputs = Input(shape=(None, 1))
         # We set up our decoder to return full output sequences,
@@ -84,7 +108,7 @@ class Seq2Seq:
         # NOTE: this only supports a single decoder layer at the moment
         decoder_lstm = layers.LSTM(self.hidden_size, return_sequences=True, return_state=True, activation='tanh',
                                    name='decoder_lstm')
-        decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state=encoder_states)
+        decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state=decoder_init)
 
         decoder_pre_output = layers.Dense(self.pre_output_dense_size, activation='relu', name='decoder_pre_output')
         decoder_dense = layers.Dense(1, activation='linear', name='decoder_dense')
@@ -94,7 +118,11 @@ class Seq2Seq:
 
         # Define the model that will turn
         # `encoder_input_data` & `decoder_input_data` into `decoder_target_data`
-        model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+        if self.state_embed_size:
+            inputs = [encoder_inputs, decoder_inputs, state_inputs]
+        else:
+            inputs = [encoder_inputs, decoder_inputs]
+        model = Model(inputs, decoder_outputs)
 
         if transfer_model is not None:
             model.set_weights(transfer_model.get_weights())
@@ -104,7 +132,11 @@ class Seq2Seq:
 
         encoder_model = Model(encoder_inputs, encoder_states)
 
-        return model, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense
+        if self.state_embed_size:
+            return model, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense, bridge, \
+                   state_embed_layer, state_embed_model
+        else:
+            return model, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense, bridge
 
     def build_inference_network(self, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense):
         decoder_state_input_h = Input(shape=(self.hidden_size,))
@@ -125,10 +157,18 @@ class Seq2Seq:
     def decode_sequence(self, input_seq, pred_steps=None):
         if not pred_steps:
             pred_steps = self.target_length
+        if self.state_embed_size:
+            input_seq, state_idx = input_seq
         if input_seq.ndim == 2:
             input_seq = np.expand_dims(input_seq, 0)
         # Encode the input as state vectors.
         states_value = self.encoder_model.predict(input_seq)
+
+        if self.state_embed_size:
+            states_value.append(self.state_embed_model(state_idx))
+        x = tf.concat(states_value, axis=-1)
+        x = self.bridge(x)
+        x = tf.split(x, 2, axis=-1)
 
         # Generate empty target sequence of length 1.
         target_seq = np.zeros((1, 1, 1))
@@ -142,7 +182,7 @@ class Seq2Seq:
         decoded_seq = np.zeros((1, pred_steps, 1))
 
         for i in range(pred_steps):
-            output, h, c = self.decoder_model.predict([target_seq] + states_value)
+            output, h, c = self.decoder_model.predict([target_seq] + x)
 
             decoded_seq[0, i, 0] = output[0, 0, 0]
 
@@ -183,9 +223,15 @@ class Seq2Seq:
         return self.training_network.fit(*args, **kwargs)
 
     def transfer(self):
-        training_network, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense = \
-            self.build_training_network(transfer_model=self.training_network)
-        decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
+        if self.state_embed_size:
+            training_network, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense, \
+                bridge, state_embed_layer, state_embed_model = self.build_training_network()
+            decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
+        else:
+            training_network, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense, \
+                bridge = self.build_training_network()
+            decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
+
 
         model = Seq2Seq(history_length=self.history_length,
                         target_length=self.target_length,
@@ -196,6 +242,8 @@ class Seq2Seq:
                         dropout=self.dropout)
         model.training_network = training_network
         model.decoder_model = decoder_model
+        if self.state_embed_size:
+            model.state_embed_model = state_embed_model
 
         return model
 

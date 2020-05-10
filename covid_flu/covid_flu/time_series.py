@@ -181,7 +181,8 @@ def prepare_data(ts: np.ndarray,
                  test_size=0.2,
                  pad_value=None,
                  min_history_size=1,
-                 teacher_forcing=False) -> tuple:
+                 teacher_forcing=False,
+                 states=False) -> tuple:
     """
     Prepare time series data into history and target windows, splitting into
     train val and test, batched, repeating tensorflow datasets. returns a dict with
@@ -197,6 +198,7 @@ def prepare_data(ts: np.ndarray,
     pad_value
     min_history_size
     teacher_forcing: {bool} whether to prepare the data to use teacher forcing or not.
+    states: {bool} whether to include state indices in each input data or not.
 
     Returns
     -------
@@ -211,15 +213,23 @@ def prepare_data(ts: np.ndarray,
                                min_history_size=min_history_size)
 
     res = []
+    state2idx = {s: i for i, s in enumerate(np.unique(groups))}
     for split in ('train', 'val', 'test'):
-        X, y = dct[f'X_{split}'], dct[f'y_{split}']
+        X, y, st = dct[f'X_{split}'], dct[f'y_{split}'], dct[f'states_{split}']
+        st = np.array([state2idx[s] for s in st])
         if teacher_forcing:
             y_tf = np.zeros_like(y)
             y_tf[:, 1:, :] = y[:, :-1, :]
             y_tf[:, 0, :] = X[:, -1, :]
-            data = ((X, y_tf), y)
+            if states:
+                data = ((X, y_tf, st), y)
+            else:
+                data = ((X, y_tf), y)
         else:
-            data = (X, y)
+            if states:
+                data = ((X, st), y)
+            else:
+                data = (X, y)
         ds = make_dataset(data, batch_size=batch_size)
         res.append(ds)
     ds_train, ds_val, ds_test = res

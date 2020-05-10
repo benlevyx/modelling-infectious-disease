@@ -189,12 +189,17 @@ def plot_state_predictions_multi(model, data_dict, state, target_size, scaler=No
     plt.title(state)
 
 
-def plot_seq2seq_preds(model, data_dict, state, pred_steps, split='test', scaler=None, ax=None):
+def plot_seq2seq_preds(model, data_dict, state, pred_steps, split='test', scaler=None, ax=None, state2idx=None):
     if ax is None:
         ax = plt.gca()
     state_subset = data_dict[f'states_{split}'] == state
     X_te = data_dict[f'X_{split}'][state_subset][0:1]
-    yhat = model.decode_sequence(X_te, pred_steps).flatten()
+
+    if state2idx is not None:
+        state_idx = np.array([[state2idx[state]]])
+        yhat = model.decode_sequence((X_te, state_idx), pred_steps).flatten()
+    else:
+        yhat = model.decode_sequence(X_te, pred_steps).flatten()
     trg_len = len(data_dict[f'y_{split}'][state_subset][0].flatten())
     y_true = data_dict[f'y_{split}'][state_subset][::trg_len].flatten()[:pred_steps]
 
