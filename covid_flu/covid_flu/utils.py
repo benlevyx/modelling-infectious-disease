@@ -35,6 +35,11 @@ def load_covid_data():
     return covid_data
 
 
+def load_state_data():
+    state_data = pd.read_csv(config.state_stats / 'state_stats.csv')
+    return state_data
+
+
 def scale_data(x: np.ndarray, scaler=None):
     if scaler is None:
         scaler = StandardScaler()

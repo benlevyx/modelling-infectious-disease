@@ -45,7 +45,9 @@ class Seq2Seq:
                  num_decoder_layers=1,
                  hidden_size=32,
                  pre_output_dense_size=16,
-                 dropout=0):
+                 dropout=0,
+                 state_input_size=None,
+                 state_hidden_size=None):
 
         self.history_length = history_length
         self.target_length = target_length
@@ -65,20 +67,32 @@ class Seq2Seq:
         # and https://github.com/JEddy92/TimeSeries_Seq2Seq/blob/master/notebooks/TS_Seq2Seq_Intro.ipynb
         encoder_inputs = Input(shape=(self.history_length, 1))
 
-        if self.num_encoder_layers == 1:
-            encoder = layers.LSTM(self.hidden_size, activation='tanh', dropout=self.dropout, name='encoder_lstm',
-                                  return_sequences=True, return_state=True)
-        else:
-            cells = [layers.LSTMCell(self.hidden_size, activation='tanh', dropout=self.dropout) for _ in range(self.num_encoder_layers)]
-            stacked = layers.StackedRNNCells(cells)
-            encoder = layers.RNN(stacked, return_sequences=True, return_state=True, name='encoder_lstm')
-        encoder_outputs, state_h, state_c = encoder(encoder_inputs)
+        x = encoder_inputs
+        state_h, state_c = None, None
+        for i in range(self.num_encoder_layers):
+            x, state_h, state_c = layers.LSTM(self.hidden_size, activation='tanh', dropout=self.dropout,
+                                              name=f'encoder_lstm{i}', return_sequences=True, return_state=True)(x)
+        encoder_outputs = x
+
+        # if self.num_encoder_layers == 1:
+        #     encoder = layers.LSTM(self.hidden_size, activation='tanh', dropout=self.dropout, name='encoder_lstm',
+        #                           return_sequences=True, return_state=True)
+        # else:
+        #     cells = [layers.LSTMCell(self.hidden_size, activation='tanh', dropout=self.dropout) for _ in range(self.num_encoder_layers)]
+        #     stacked = layers.StackedRNNCells(cells)
+        #     encoder = layers.RNN(stacked, return_sequences=True, return_state=True, name='encoder_lstm')
+        # print(encoder(encoder_inputs))
+
+        # encoder_outputs, state_h, state_c = encoder(encoder_inputs)
+
 
         # We discard `encoder_outputs` and only keep the states.
-        if self.num_encoder_layers == 1:
-            encoder_states = [state_h, state_c]
-        else:
-            encoder_states = [state_h[-1], state_c[-1]]
+        encoder_states = [state_h, state_c]
+        # if self.num_encoder_layers == 1:
+        #     encoder_states = [state_h, state_c]
+        # else:
+        #     encoder_states = [state_h[-1], state_c[-1]]
+        # encoder_states = tf.stack(encoder_states, axis=0)
 
         # Set up the decoder, using `encoder_states` as initial state.
         decoder_inputs = Input(shape=(None, 1))
@@ -187,14 +201,6 @@ class Seq2Seq:
         return self.training_network.fit(*args, **kwargs)
 
     def transfer(self):
-        # transfer_layers = {}
-        # for layer in self.training_network.layers:
-        #     if 'dense' in layer.name:
-        #         layer.trainable = True
-        #     else:
-        #         layer.trainable = False
-        #     transfer_layers[layer.name] = layer
-
         training_network, encoder_model, decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense = \
             self.build_training_network(transfer_model=self.training_network)
         decoder_model = self.build_inference_network(decoder_inputs, decoder_lstm, decoder_pre_output, decoder_dense)
