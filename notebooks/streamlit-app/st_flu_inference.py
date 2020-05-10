@@ -584,7 +584,7 @@ def main():
 
 	state_stats_df4['smoking_rate'] = [state2smoking_rate[state] / 100 for state in state_stats_df4.index]
 
-	st.write(state_stats_df)
+	st.write(state_stats_df4)
 
 	st.write("## Bayesian Model")
 
