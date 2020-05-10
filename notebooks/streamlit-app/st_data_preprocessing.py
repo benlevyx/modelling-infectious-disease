@@ -17,7 +17,7 @@ from covid_flu import config
 def main():
 	st.title('Data Preprocessing')
 
-	st.write("The full notebook can be found here: ")
+	st.write("The full notebook can be found [here](https://github.com/benlevyx/modelling-infectious-disease/tree/master/notebooks/data_preprocessing.ipynb)")
 
 	st.write("### Preprocessing of flu wILI time series data")
 
@@ -198,4 +198,4 @@ def main():
 
 	st.write("Limiting the analysis to the weeks with a significant average change in wILI rates reduced the number of entries in the percent change dataframe that were either very inflated (i.e. greater than 500%) or very deflated (i.e. lower than -90%) by around 96%. While this was encouraging, we still had to handle the several extreme entries that remained. Comparing the values where the percent change between the two values exceeds either 500 percent or -90 percent to those imputed above reveals that the wILI values that lead to these issues are overwhelmingly those filled in by the Gaussian process model and are therefore inherently unreliable. Therefore, we wouldn't be distorting the original data by changing these values. Because these extreme values comprised just 28 out of the 10199 entries in the percent change dataframe, we used a simple imputation technique that shouldn't have a significant impact on the model -- we simply replaced the extreme entries in the percent change dataframe with the mean percent change of all the other non-extreme entries for the given week.")
 
-	
+
