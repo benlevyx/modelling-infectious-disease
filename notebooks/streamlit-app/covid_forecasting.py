@@ -17,10 +17,12 @@ import plotly.express as px  # Be sure to import express
 from covid_flu import config
 
 def main():
-    st.title('Covid Forecasting')
+    st.title('Covid Forecasting: CAR')
     st.write('In this section, we will explore how we can gain knowledge from 10 years of flu data to '
-             'better predict the spread of Covid-19 over the US states. Two main approaches will be attempted: '
-             'one Conditional Autoregressive Model and one transfer learning RNN approach (BEN)')
+             'better predict the spread of Covid-19 over the US states. More specifally, we build the a version of'
+             ' a so-called Conditional Autoregressive (CAR) Model. This Streamlit page will walk through the main '
+             'ideas of the model, for more details we refer to the notebook: '
+             'https://github.com/benlevyx/modelling-infectious-disease/blob/master/notebooks/CAR%20Model%20Flu.ipynb')
     st.subheader('1. Get the data')
     st.write('First, we should have a look at the data. For the Covid-19 data, we found that the New York Times '
              'released a publicly available dataset (source:https://data.humdata.org/dataset/nyt-covid-19-data). It contains the daily number of recorded cases per US '
@@ -86,10 +88,12 @@ def main():
              '- $\\beta$ is a vector containing the local AR time-lag-regression coefficients. \n'
              '- $z_i$ is the latent spatial random error, which will be conditional on the neighbouring states,'
              'where neighbour still needs to be defined. \n - $\epsilon_i$ an independent error'
-             '$\epsilon_i \sim N(0, \sigma_{\epsilon_i}^2)$ \n The spatial factors can then still be determined'
+             '$\epsilon_i \sim N(0, \sigma_{\epsilon_i}^2)$ \n '
+                ''
+             'The spatial factors can then still be determined'
              ' in the same way: \n'
-             '$$z_i | z_j , i \\neq j \sim N(\sum_{j} c_{ij} z_j, m_{ii})$$'
-             'Following standard practice, we can define the matrix $C = \\rho W$. Now it comes down to '
+             '$$z_i | z_j , i \\neq j \sim N(\sum_{j} c_{ij} z_j, m_{ii})$$')
+    st.markdown('Following standard practice, we can define the matrix $C = \\rho W$. Now it comes down to '
              'come up with a reasonable value for the correlation variable $\\rho$ and the construction of '
              'neighbor matrix $W$.')
 
@@ -226,21 +230,21 @@ def main():
             T_pred = pred*covid_data[state][day]
             pred_state.append(T_pred)
 
-        # rmse = np.sqrt(mean_squared_error(pred_state,
-        #                          covid_data[state].iloc[start + lag: len(covid_data) - pred_ahead]))
-        # rmse = np.round(rmse, 3)
+        rmse = np.sqrt(mean_squared_error(pred_state,
+                                 covid_data[state].iloc[start + lag: len(covid_data) - pred_ahead]))
+        rmse = np.round(rmse, 3)
 
-        return pred_state#, rmse
+        return pred_state, rmse
 
     # plot
     pred_ahead = 1
     lag = 1
     start = 56
-    pred_state = lag1_pred(state)
+    pred_state, rmse = lag1_pred(state)
     fig2 = plt.figure(figsize = (12,8))
     plt.plot(range(start, len(covid_data[state])), covid_data[state][start:], label = 'Real data')
     plt.plot(range(start+2, len(covid_data[state])),
-             pred_state, label = '1 lag CAR prediction')
+             pred_state, label = '1 lag CAR prediction - RMSE = {}'.format(rmse))
     plt.title('CAR predictions of Covid cases for {}'.format(state), fontsize = 20)
     plt.xlabel('Day since Jan 21 2020', fontsize = 20)
     plt.ylabel('# cases', fontsize = 20)
@@ -256,16 +260,142 @@ def main():
                 'recorded in that state.')
 
     img = Image.open(config.notebooks/'streamlit-app'/'images'/'StatesAnnotCar1.png')
-    st.image(img, caption='', format='PNG', width=750)
+    st.image(img, caption='', format='PNG', width=650)
 
     st.markdown('From the figure, we would hope to discover that states with a similar spread of Covid-19, would'
                 ' be grouped together. This is not entirely the case, but it is cool to see how for instance the '
                 'New York is clearly an outlier, which makes total sense given its extreme Covid history.')
 
+    st.markdown('Now the model has been tested on a relatively easy task, we can now try to predict the number of '
+                'Covid cases per state 5 days ahead in time. For this we will also increase the amount of lags included '
+                'as local regression predictors to 5. The resulting preditions for 10 example states are illustrated below: ')
 
+    img = Image.open(config.notebooks/'streamlit-app'/'images'/'CARLLAG5.png')
+    st.image(img, caption='CAR predictions for 5 days ahead', format='PNG', width=700)
 
+    state = st.selectbox('Select state for which you wish to see the 5 days ahead CAR predictions. It may take a second.',
+		 covid_data.columns)
 
+    CAR_model_lag5 = pd.read_csv(config.data / 'processed' / 'CARModelLag5_V2')
+    CAR_model_lag5.set_index('Unnamed: 0', inplace = True)
+    params_dict = dict()
+    for k, state_name in enumerate(covid_data.columns):
+        params_k = [CAR_model_lag5['mean']['beta0[{}]'.format(k)],
+                    CAR_model_lag5['mean']['phi[{}]'.format(k)]]
+        params_dict[state_name] = params_k
 
+    def lag5_pred(state):
+        # predict
+        pred_state = []
+        for i, day in enumerate(range(start + lag, len(covid_data) - pred_ahead)):
+            params = params_dict[state]
+            lag_X = [covid_data[state][day - step]/covid_data[state][day - step -1] for step in range(1, lag+1)]
+            log_pred = params[0]
+            for j in range(lag):
+                log_pred += CAR_model_lag5['mean']['betas[{}]'.format(j)]*lag_X[j]
+            log_pred += params[1]
+            pred = np.exp(log_pred)
+            T_pred = pred*covid_data[state][day]
+            pred_state.append(T_pred)
+
+        rmse = np.sqrt(mean_squared_error(pred_state,
+                                 covid_data[state].iloc[start + lag: len(covid_data) - pred_ahead]))
+        rmse = np.round(rmse, 3)
+
+        return pred_state, rmse
+
+    # plot
+    pred_ahead = 5
+    lag = 5
+    start = 57
+    pred_state, rmse = lag5_pred(state)
+    fig2 = plt.figure(figsize = (12,8))
+    plt.plot(range(start, len(covid_data[state])), covid_data[state][start:], label = 'Real data')
+    plt.plot(range(start+lag+pred_ahead, len(covid_data[state])),
+             pred_state, label = '5 days ahead CAR prediction - RMSE = {}'.format(rmse))
+    plt.title('CAR predictions of Covid cases for {}'.format(state), fontsize = 20)
+    plt.xlabel('Day since Jan 21 2020', fontsize = 20)
+    plt.ylabel('# cases', fontsize = 20)
+    plt.legend(fontsize = 20)
+    st.pyplot(fig2)
+
+    st.markdown('Clearly, the results are not as good as with the one day prediction, but it still'
+                'seems pretty decent. The RMSE on the test set in this case is equal to 11488.5. '
+                ''
+                'Note that prediction is only one of the advantages of the CAR model. By having learned all '
+                'the spatial parameters, we can investigate the spatial dependence of Covid predictions. '
+                'For instane, the following figure illustrates how the predictions in the state New York are'
+                'consistently underpredicting because its neighboring states have significantly lower cases.')
+
+    img = Image.open(config.notebooks/'streamlit-app'/'images'/'CAR_NY_Neighb.png')
+    st.image(img, caption='CAR prediction for New York and its neighbors', format='PNG', width=700)
+
+    st.markdown('While this interdependency of states might seem as a disadvantage at first, it could '
+                'potentially help to identify whether states have been underreporting the number of Covid cases '
+                'or not. In order to test this, we can have a look at the positive test rates for each state. '
+                'The dataset below contains the current positive test rate for Covid for all states. '
+                'Source: https://covidtracking.com/api. ' )
+
+    test_data = pd.read_csv(config.data / 'processed' / 'TestRates.csv')
+    st.write(test_data)
+
+    state_name2abbrev = {
+    'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+    'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+    'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS',
+    'Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD','Massachusetts':'MA',
+    'Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO','Montana':'MT',
+    'Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM',
+    'New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK',
+    'Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
+    'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT',
+    'Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY'}
+
+    abbrev2state_name = {state_name2abbrev[key]: key for key in state_name2abbrev.keys()}
+    test_rates = dict()
+
+    for i, state_abbrev in enumerate(test_data['state']):
+        test_rate = 100*test_data['positive'].iloc[i]/test_data['total'].iloc[i]
+        if state_abbrev in abbrev2state_name.keys():
+            state_name = abbrev2state_name[state_abbrev]
+            test_rates[state_name] = test_rate
+        #else:
+            #print(state_abbrev)
+
+    fig5 = plt.figure(figsize = (20,15))
+    plt.bar(range(len(test_rates)), test_rates.values())
+    plt.xticks(range(len(test_rates)), test_rates.keys(), rotation = 'vertical', fontsize = 10)
+    plt.xlabel('State', fontsize = 20)
+    plt.ylabel('Positive test rate [%]',  fontsize = 20)
+    plt.title('Positive test rate for Covid for all US states',  fontsize = 20)
+    st.pyplot(fig5)
+
+    st.markdown('The positive test rate can clearly differ significantly from state to state.'
+                'When its value is high for a specific state, the probability that the number of '
+                'actual cases of Covid-19 in that state is higher than the reported value, is higher.'
+                'We therefore came up with a measure of overpredicting of our CAR model, being the '
+                'average difference of the prediction and the ground truth. When this is positive, '
+                'our CAR model is actually suggesting that, based on its spatial knowledge, the state '
+                'is more likely to have more cases in reality than is currently reported. Therefore, '
+                'it would make sense that our overpredicting rate is positively correlated with the positive '
+                'test rate. The following figure illustrates that this is slightly the case.')
+
+    img = Image.open(config.notebooks/'streamlit-app'/'images'/'CARTestOverpred.png')
+    st.image(img, format='PNG', width=700)
+
+    st.markdown('In conclusion, we have investigated the performance of a classical Bayesian model,'
+                'the Conditional Autoregressive model, to the spatial and temporal spread of Covid-19.'
+                'Using simple LASSO regression on the large dataset on the flu, we were able to come up with'
+                'a reasonable set of neighbors for each state in the context of deseases. We then build the CAR '
+                'model using this weight matrix W to predict the total number of Covid cases for'
+                ' both 1 and 5 day(s) ahaead for each US state. While the results were not bad,'
+                'we have to admit that the prediction performance was not great. Given the monotonicity of the data,'
+                'we could easily achieve the same performance with simple autoregression. We did find additional value '
+                'in using the CAR model when we wish to understand the spatial interdependency of the spread of Covid. '
+                'From the last graph, it was for instance clear that our model has the potential to estimate whether '
+                'a state is underreporting the total numer of cases or not. For us, this was a reasonable way'
+                ' of embedding information on the flu in a Bayesian model for Covid, that can lead to '
+                'interpretable results.')
 
 
 if __name__ == "__main__":
