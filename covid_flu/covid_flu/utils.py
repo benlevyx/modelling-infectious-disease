@@ -23,8 +23,8 @@ def display_all(df):
 
 
 def load_flu_data():
-    return pd.read_csv(config.processed / 'flu_ground_truth_imputed.csv')
-
+    flu_data = pd.read_csv(config.processed / 'flu_ground_truth_imputed.csv')
+    return flu_data
 
 def load_covid_data():
     covid_data = pd.read_csv(config.raw / 'Covid_data.csv', index_col=0)
@@ -32,6 +32,9 @@ def load_covid_data():
     covid_data.columns = ['date', 'state', 'cases']
     covid_data = covid_data.fillna(0.)
     covid_data['date'] = pd.to_datetime(covid_data['date'])
+    # Switching to new cases
+    covid_data['total_cases'] = covid_data['cases']
+    covid_data['cases'] = covid_data['total_cases'] - covid_data['total_cases'].shift(1, fill_value=0)
     return covid_data
 
 
