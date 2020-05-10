@@ -18,7 +18,7 @@ from covid_flu import config
 
 def main():
     st.title('Forecasting Flu with Recurrent Neural Networks')
-    with open("style.css") as f:
+    with open(str(config.streamlit / 'style.css')) as f:
         st.markdown('<style>{}</style>'.format(f.read()), unsafe_allow_html=True)
 
     st.write("""

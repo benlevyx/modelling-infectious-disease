@@ -65,3 +65,11 @@ def calculate_rmse(y_true, y_pred):
     # mse = mean_squared_error(y_true, y_pred)
     mse = np.mean((y_true - y_pred) ** 2)
     return np.sqrt(mse)
+
+
+def save_weights(model, name):
+    model.training_network.save_weights(str(config.models / f'{name}.h5'))
+
+
+def load_weights(model, name):
+    model.training_network.load_weights(str(config.models / f'{name}.h5'))
