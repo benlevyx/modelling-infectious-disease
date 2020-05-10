@@ -224,7 +224,6 @@ def main():
     plot_multiple_steps_preds_for_state(X_all, y_all, states_all, encoder_model, decoder_model, 5, state_chosen, 0.8, sc)
 
 
-
 if __name__ == "__main__":
     main()
 
