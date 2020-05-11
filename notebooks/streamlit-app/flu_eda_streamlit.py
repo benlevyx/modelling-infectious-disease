@@ -65,13 +65,6 @@ def main():
 			""")
 
 
-	if st.checkbox('Show chart'):
-		fig = plt.figure(figsize=(20, 10))
-		for col in df.columns:
-			data = df.loc[df[col].notnull(), col]
-			plt.plot(list(data.index), list(data))
-		st.pyplot(fig)
-
 	weeks = list(week2cnt.keys())
 	beginning_december_week = weeks.index('2010-48')
 	end_march_week = beginning_december_week + 17
@@ -161,6 +154,18 @@ def main():
 	)
 
 	st.plotly_chart(fig)
+
+
+	st.write("""
+			 From the EDA conducted above, two patterns become evident. Firstly, there is a notable seasonal pattern for flu rates across states.
+			 These patterns are persistent through the last 10 years. In other words, the past seems to imply the future. This provides some 
+			 first evidence that models like recurrent neural networks (RNN), which have the ability to encode long sequences of historical observations,
+			would be successful in providing accurate flu rate predictions. For this reason, in *Flu Forecasting* section we experiment with different
+			RNN architectures in order to come up with an accurate forecasting model for flu. Also, it is clear that different states seem to affected by
+			flu more than other (e.g. southern states versus northern states). In *Flu Inference*, we attempt to understand whether different socioeconomic and 
+			environmental factors present in each state can explain the differences between states. 
+			 """
+			 )
 
 
 if __name__ == "__main__":
