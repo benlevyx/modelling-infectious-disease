@@ -8,6 +8,7 @@ import st_flu_forecasting as flu_forcast
 import covid_forecasting as covid
 import st_conclusion as concl
 import st_transfer_learning as tl
+import st_about as about
 
 
 def main():
@@ -18,7 +19,8 @@ def main():
                                                   "Flu Forecasting",
                                                   "COVID-19 Forecasting",
                                                   "COVID-19 Transfer Learning",
-                                                  "Conclusion"])
+                                                  "Conclusion",
+                                                  "About"])
     if page == "Homepage":
         hp.main()
     elif page == "EDA":
@@ -35,6 +37,8 @@ def main():
         tl.main()
     elif page == "Conclusion":
         concl.main()
+    elif page == "About":
+        about.main()
 
 
 #add about section in the end
