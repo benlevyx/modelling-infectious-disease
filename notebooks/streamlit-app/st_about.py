@@ -39,9 +39,9 @@ def main():
     images = [crop_center(Image.open(config.images / 'about' / f'{f}.jpg')) for f in imfiles]
     captions = [
         "Benjamin Levy (https://benlevyx.github.io)",
-        "Dimitris Vamvourellis",
-        "Matthieu Meeus",
-        "Will Fried"
+        "Dimitris Vamvourellis (https://github.com/dvamvourellis)",
+        "Matthieu Meeus (https://github.com/matthieumeeus)",
+        "Will Fried (https://github.com/williamfried)"
     ]
     st.image(images, width=300, caption=captions)
 
