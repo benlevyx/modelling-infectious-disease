@@ -153,7 +153,7 @@ def main():
         )
 
     img = Image.open(config.notebooks/'streamlit-app'/'images'/'seq2seq.png')
-    st.image(img, caption='Seq2Seq architecture (source: https://github.com/Arturus/kaggle-web-traffic/blob/master/images/encoder-decoder.png)', format='PNG', width=900)
+    st.image(img, caption='Seq2Seq architecture (source: https://github.com/Arturus/kaggle-web-traffic/blob/master/images/encoder-decoder.png)', format='PNG', width=1000)
 
     st.write("""
         As explained above, the Seq2Seq model will not output a vector sequence directly 
@@ -190,7 +190,7 @@ def main():
     img = Image.open(config.notebooks / 'streamlit-app' / 'images' / 'encoder_summary.png')
     st.image(img,
              caption='Encoder summary',
-             format='PNG', width=600)
+             format='PNG', width=700)
 
     decoder_model = seq2seq_model.decoder_model
     decoder_model.load_weights(str(config.models / 'seq2seq_50_5_decoder.h5'))
@@ -198,7 +198,7 @@ def main():
     img = Image.open(config.notebooks / 'streamlit-app' / 'images' / 'decoder_summary.png')
     st.image(img,
              caption='Decoder summary',
-             format='PNG', width=600)
+             format='PNG', width=700)
 
     X_all, y_all, states_all, sc = load_data()
 
