@@ -1,0 +1,31 @@
+---
+title: "ac209b"
+author: "Will Fried"
+date: "5/1/2020"
+output: pdf_document
+---
+
+Define $\delta_i$ to be the percent change in the number of flu cases between two consecutive weeks for state $i$.
+
+$$ \delta_i \sim N\left(\frac{\sum_{j=1}^{48}\alpha_{ij}\delta_jI(j \neq i)}{\sum_{j=1}^{48}\alpha_{ij}I(j \neq i)}, \sigma^2\right) $$
+$$ \sigma^2 \sim Inv-Gamma(1, 1)$$
+$$ \alpha_{ij} \sim Expo(\lambda_{ij})$$
+$$ log(\lambda_{ij}) = \beta_0 + \beta_1I_{neighbor} + \beta_2|density_i - density_j| \ + \beta_3*commute_{ij} \ + ... + \ \beta_k|summer\_temp_i - summer\_temp_j|*I(season = summer)$$
+$$ \beta_i \sim N(0, 100) $$
+
+
+
+More weight is automatically placed on the weeks where the flu rates are changing most rapidly
+
+Learn two things:
+
+1. Determine which states have most closely linked to state $i$ by looking at $\alpha_{ij}$ 
+2. Impact of each of the predictors on how closely two states are linked: 
+
+$\beta_i$ = 0 indicates that the ith predictor has no impact on the relationship
+
+$\beta_i$ > 0 indicates that the greater the discrepancy in the ith predictor value for two arbitrary states, the less the two states are linked (higher $\lambda_{ij}$ implies smaller $\alpha_ij$). We want to identify predictors that fall into this category!
+
+$\beta_i$ < 0 indicates that the greater the discrepancy in the ith predictor value for two arbitrary states, the more the two states are linked. This doesn't make any sense except for $I_{neighbor}$ and $commute_{ij}$
+
+
