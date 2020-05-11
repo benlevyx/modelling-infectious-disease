@@ -18,7 +18,7 @@ def main():
 
 	st.title('Flu Inference')
 
-	st.write("The full notebook can be found here: ")
+	st.write("The full notebook can be found [here](https://github.com/benlevyx/modelling-infectious-disease/tree/master/notebooks/bayesian_model.ipynb).")
 
 	st.write('## Gathering state-level features')
 
@@ -761,10 +761,10 @@ def main():
 
 	st.write("The sampling took a whopping 13 hours to sample just 500 times for each chain (with a 500 burn-in sample). However, as shown below the results confirm that the model was correctly specified, as the majority of the true $\\beta$ values lie within the corresponding 94 percent credible interval. Therefore, performance inference for the actual data should yield reliable results.\n\nHowever, carrying out inference on this synthetic data reveals several issues. First, many of the r_hat values are significantly larger than 1.0, which means that more than 500 samples are needed for the chains to converge to the posterior distribution. And second, the fact that the sampling took so long may indicate that the uninformative priors are too flat and make it difficult for the NUTS sampler to sample points from the true posterior distribution. To address these issues, the number of samples is increased from 500 to 1000 and a semi-informative prior is placed on the $\\beta$ and $\\sigma^2$ parameters ($N(0, 25)$ for each of the $\\beta$s and $Inv-Gamma(2, 2)$ for each $\\sigma^2$.")
 
-	#sim_trace_df = pd.read_csv(pred_dir / 'sim_trace.csv')
-	#st.write(sim_trace_df)
+	sim_trace_df = pd.read_csv(pred_dir / 'sim_trace.csv')
+	st.write(sim_trace_df)
 
-	st.write("Unfortunately I ran into major issues running MCMC for the actual data. A burn-in of 500 and a sample of 1000 should have taken around 18 hours to finish. However, the first time I ran it, it was 80 percent complete after 14 hours and then my screen saver didn't turn off and the notebook shut down. I then tried running in a second time, and this time it again was 80 percent done after another 14 hours and then encountered a memory failure issue that terminated the notebook. Therefore, the third time I only asked for 500 samples, even though I knew this likely wouldn't be large enough for the sampler to converge. It took 14 hours to run but finished successfully. Even so, the model was so unwieldy that it took an additional two hours just to save the model and create a summary dataframe.")
+	st.write("Unfortunately we ran into major issues running MCMC for the actual data. A burn-in of 500 and a sample of 1000 should have taken around 18 hours to finish. However, the first time we ran it, it was 80 percent complete after 14 hours and then the screen saver didn't turn off and the notebook shut down. We then tried running in a second time, and this time it again was 80 percent done after another 14 hours and then encountered a memory failure issue that terminated the notebook. Therefore, the third time we only asked for 500 samples, even though we knew this likely wouldn't be large enough for the sampler to converge. It took 14 hours to run but finished successfully. Even so, the model was so unwieldy that it took an additional three hours just to save the model and create a summary dataframe.")
 
 	st.write("Results of MCMC sampling:")
 
