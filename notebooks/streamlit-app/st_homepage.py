@@ -13,6 +13,7 @@ plt.rcParams.update({'font.size': 18})
 import plotly.express as px  # Be sure to import express
 from covid_flu import config
 
+
 def main():
     st.title('Homepage')
 
