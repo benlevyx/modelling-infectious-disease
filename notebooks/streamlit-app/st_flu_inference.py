@@ -18,7 +18,7 @@ def main():
 
 	st.title('Flu Inference')
 
-	st.write("The full notebook can be found here: ")
+	st.write("The full notebook can be found [here](https://github.com/benlevyx/modelling-infectious-disease/tree/master/notebooks/bayesian_model.ipynb).")
 
 	st.write('## Gathering state-level features')
 
