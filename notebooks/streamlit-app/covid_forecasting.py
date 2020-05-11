@@ -36,6 +36,7 @@ def main():
         return df
 
     covid_data = fetch_and_clean_data()
+    covid_data = covid_data.fillna(0.0)
 
     st.write(covid_data)
 
@@ -389,11 +390,11 @@ def main():
                 'a reasonable set of neighbors for each state in the context of deseases. We then build the CAR '
                 'model using this weight matrix W to predict the total number of Covid cases for'
                 ' both 1 and 5 day(s) ahaead for each US state. While the results were not bad,'
-                'we have to admit that the prediction performance was not great. Given the monotonicity of the data,'
+                'we have to admit that the prediction performance was not great either. Given the monotonicity of the data,'
                 'we could easily achieve the same performance with simple autoregression. We did find additional value '
                 'in using the CAR model when we wish to understand the spatial interdependency of the spread of Covid. '
                 'From the last graph, it was for instance clear that our model has the potential to estimate whether '
-                'a state is underreporting the total numer of cases or not. For us, this was a reasonable way'
+                'a state is under-reporting the total number of cases or not. For us, this was a reasonable way'
                 ' of embedding information on the flu in a Bayesian model for Covid, that can lead to '
                 'interpretable results.')
 
