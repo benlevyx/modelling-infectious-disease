@@ -1,1 +1,1 @@
-web: sh streamlit-app/setup.sh && streamlit run streamlit-app/flu_eda_streamlit.py
+web: sh streamlit-app/setup.sh && streamlit run notebooks/streamlit-app/streamlit_final.py
