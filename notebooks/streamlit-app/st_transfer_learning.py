@@ -30,7 +30,7 @@ scaler_flu = StandardScaler()
 scaler_covid = StandardScaler()
 
 
-@st.cache
+@st.cache(allow_output_mutation=True)
 def load_data():
     flu_data = utils.load_flu_data()
     covid_data = utils.load_covid_data()
