@@ -24,7 +24,7 @@ chardet==3.0.4
 Click==7.0
 cloudpickle==1.2.2
 -e git+https://github.com/benlevyx/modelling-infectious-disease.git@c740d7c72b553e0b9b6f45f7e0ea6a4155d5df35#egg=covid_flu&subdirectory=covid_flu
-cryptography==2.8
+cryptography==3.2
 cycler==0.10.0
 cymem==2.0.3
 cytoolz==0.10.1
