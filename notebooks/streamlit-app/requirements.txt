@@ -148,7 +148,7 @@ srsly==1.0.0
 statsmodels==0.11.0
 streamlit==0.57.3
 tensorboard==2.0.0
-tensorflow==2.0.0
+tensorflow==2.6.4
 tensorflow-estimator==2.0.0
 termcolor==1.1.0
 terminado==0.8.3
