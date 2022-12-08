@@ -5,7 +5,7 @@ attrs==19.3.0
 backcall==0.1.0
 bleach==3.1.5
 cachetools==4.1.0
-certifi==2020.4.5.1
+certifi==2022.12.7
 chardet==3.0.4
 -e git+https://github.com/benlevyx/modelling-infectious-disease.git@03691c745623573335dfd52464310f41ea4699c7#egg=covid_flu&subdirectory=covid_flu
 cycler==0.10.0
